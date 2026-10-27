@@ -1,0 +1,15 @@
+{
+  "isok": true,
+  "data": {
+    "devices_status": {
+      "84cca87c0144": {
+        "_dev_info": {"id": "84cca87c0144", "gen": "G2", "code": "SPSW-002PE16EU", "online": true},
+        "_updated": "2026-10-27 10:00:00",
+        "switch:1": {"id": 1, "output": false, "apower": 0.0},
+        "switch:0": {"id": 0, "output": true, "apower": 742.1},
+        "sys": {"uptime": 1234},
+        "cloud": {"connected": true}
+      }
+    }
+  }
+}

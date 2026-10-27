@@ -1,0 +1,23 @@
+{
+  "isok": true,
+  "data": {
+    "devices_status": {
+      "dc4f2276846a": {
+        "_dev_info": {"id": "dc4f2276846a", "gen": "G1", "code": "SHSW-1", "online": true},
+        "relays": [{"ison": true}]
+      },
+      "inconsistent-key": {
+        "_dev_info": {"id": "84cca87c0144", "gen": "G2", "code": "SNSW-001X16EU", "online": true},
+        "switch:0": {"id": 0, "output": false}
+      },
+      "1643370677417": {
+        "_dev_info": {"id": 1643370677417, "gen": "V1", "code": "THERMOSTAT", "online": false},
+        "target_t": 21
+      },
+      "e8db84aaaaaa": {
+        "_dev_info": {"id": "e8db84aaaaaa", "gen": "G2", "code": "SNSN-0013A", "online": true},
+        "temperature:0": {"id": 0, "tC": 20.5}
+      }
+    }
+  }
+}

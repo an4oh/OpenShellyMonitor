@@ -1,0 +1,1241 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>shelly-monitor</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2338bdf8' stroke-width='2'%3E%3Cpath d='M13 2 4 14h7l-1 8 9-12h-7z'/%3E%3C/svg%3E">
+<style>
+:root {
+  --bg: #0f1216;
+  --panel: #161b22;
+  --line: #22272e;
+  --line-soft: #1b2027;
+  --control: #2d343e;
+  --text: #e6e9ee;
+  --text-2: #c9d1dc;
+  --muted: #9aa4b2;
+  --accent: #38bdf8;
+  --accent-ink: #06212c;
+  --on: #a3e635;
+  --warn: #fb923c;
+  --link: #7dd3fc;
+  --sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --mono: ui-monospace, "JetBrains Mono", Menlo, Consolas, monospace;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--sans); }
+a { color: var(--link); }
+a:hover { color: #bae6fd; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.mono { font-family: var(--mono); }
+.muted { color: var(--muted); }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+header { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; padding: 18px 32px; border-bottom: 1px solid var(--line); }
+.brand { display: flex; align-items: center; gap: 12px; }
+.brand h1 { margin: 0; font-size: 18px; font-weight: 600; letter-spacing: .02em; }
+.brand .ver { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+.spacer { flex: 1 1 0; }
+.controls { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.controls label { font-size: 12px; color: var(--muted); }
+input[type=date], input[type=search], select {
+  height: 36px; padding: 0 10px; background: var(--panel); color: var(--text);
+  border: 1px solid var(--control); border-radius: 6px; font-family: var(--mono); font-size: 13px;
+}
+input[type=search] { font-family: var(--sans); width: 220px; max-width: 100%; }
+.seg { display: flex; border: 1px solid var(--control); border-radius: 6px; overflow: hidden; }
+.seg button { height: 34px; padding: 0 14px; background: var(--panel); color: var(--text-2); border: 0; font: inherit; font-size: 13px; cursor: pointer; }
+.seg button + button { border-left: 1px solid var(--control); }
+.seg button[aria-pressed=true] { background: var(--accent); color: var(--accent-ink); font-weight: 600; }
+.btn-link { height: 36px; display: inline-flex; align-items: center; padding: 0 14px; border: 1px solid var(--control); border-radius: 6px; font-size: 13px; text-decoration: none; }
+
+main { padding: 24px 32px; display: flex; flex-direction: column; gap: 24px; max-width: 1400px; width: 100%; margin: 0 auto; }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; }
+.tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
+.tile { padding: 16px 18px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.tile .label { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; }
+.tile .value { font-family: var(--mono); font-size: 32px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tile .value small { font-size: 16px; color: var(--muted); }
+.tile .sub { font-size: 12px; color: var(--muted); }
+.tile.primary .value { color: var(--accent); }
+
+.charts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.chart { padding: 18px; display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+h2 { margin: 0; font-size: 14px; font-weight: 600; }
+.hbar { display: grid; grid-template-columns: 180px minmax(0, 1fr) 64px; gap: 10px; align-items: center; }
+.hbar .name { font-size: 13px; color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hbar .track { height: 14px; background: var(--bg); border-radius: 3px; overflow: hidden; }
+.hbar .fill { height: 14px; background: var(--accent); }
+.hbar.other .fill { background: var(--muted); opacity: .6; }
+.hbar .num { font-family: var(--mono); font-size: 13px; text-align: right; }
+.vbars { display: flex; align-items: flex-end; gap: 4px; height: 180px; padding-top: 8px; }
+.vbars .col { flex: 1 1 0; display: flex; flex-direction: column; justify-content: flex-end; height: 100%; min-width: 2px; }
+.vbars .bar { background: var(--accent); border-radius: 2px 2px 0 0; opacity: .85; min-height: 1px; }
+.vbars .col:hover .bar { opacity: 1; }
+.axis { display: flex; justify-content: space-between; font-family: var(--mono); font-size: 11px; color: var(--muted); }
+.empty { color: var(--muted); font-size: 13px; padding: 8px 0; }
+.hbars { display: flex; flex-direction: column; gap: 10px; }
+select { font-family: var(--sans); max-width: 150px; }
+input[type=date] { width: 140px; }
+.filter { display: inline-flex; align-items: center; gap: 8px; }
+.homes { padding: 18px; display: flex; flex-direction: column; gap: 14px; }
+.homes .hbars { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 10px 32px; }
+main[aria-busy=true] .tiles, main[aria-busy=true] .charts, main[aria-busy=true] .table-box { opacity: .55; transition: opacity .2s; }
+
+.table-head { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; padding: 14px 18px; border-bottom: 1px solid var(--line); }
+.table-box { overflow: auto; max-height: 70vh; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+thead th { position: sticky; top: 0; background: var(--panel); color: var(--muted); text-align: left; font-weight: 500; border-bottom: 1px solid var(--line); padding: 0; white-space: nowrap; }
+thead th button { all: unset; box-sizing: border-box; display: block; width: 100%; padding: 12px 18px; cursor: pointer; }
+thead th button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+thead th button::after { content: ""; margin-left: 6px; font-size: 10px; }
+thead th[aria-sort=ascending] button::after { content: "\25B2"; }
+thead th[aria-sort=descending] button::after { content: "\25BC"; }
+th.num, td.num { text-align: right; }
+.th-cell { display: block; padding: 12px 18px; }
+td { padding: 11px 18px; border-bottom: 1px solid var(--line-soft); white-space: nowrap; }
+td.mono { font-family: var(--mono); }
+td.dim { color: var(--muted); }
+.state { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; }
+.state .dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+.state.on { color: var(--on); }
+.state.off { color: var(--muted); }
+.state.offline { color: var(--warn); }
+.est { color: var(--muted); font-size: 11px; }
+.error { border: 1px solid var(--warn); color: var(--warn); border-radius: 8px; padding: 12px 16px; font-size: 13px; }
+[hidden] { display: none !important; }
+
+nav.tabs { display: flex; gap: 4px; margin-left: 8px; }
+nav.tabs a { color: var(--text-2); text-decoration: none; font-size: 13px; padding: 8px 12px; border-radius: 6px; }
+nav.tabs a:hover { background: var(--panel); color: var(--text); }
+nav.tabs a[aria-current=page] { background: var(--panel); color: var(--accent); box-shadow: inset 0 -2px 0 var(--accent); }
+.error-wrap { max-width: 1400px; margin: 0 auto; padding: 16px 32px 0; }
+.toolbar { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; padding: 14px 18px; }
+.toolbar .left { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+.count { font-size: 12px; color: var(--muted); }
+.dev-group { overflow: hidden; }
+.dev-group > h2 { padding: 14px 18px; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; }
+.dev-group > h2 .count { font-weight: 400; }
+.dev-row { display: grid; grid-template-columns: 28px minmax(0, 2.4fr) minmax(0, 1.2fr) 110px 74px 110px; gap: 12px; align-items: center;
+  padding: 10px 18px; border-bottom: 1px solid var(--line-soft); color: var(--text); text-decoration: none; font-size: 13px; }
+.dev-row:last-child { border-bottom: 0; }
+.dev-row:hover { background: #1a2029; color: var(--text); }
+.dev-row .nm { min-width: 0; }
+.dev-row .nm b { display: block; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dev-row .nm span, .dev-row .meta { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dev-row .num { font-family: var(--mono); text-align: right; }
+.kicon { width: 24px; height: 24px; color: var(--muted); }
+.kicon.on { color: var(--on); }
+.badge { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; white-space: nowrap; }
+.badge .dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; flex: none; }
+.badge.on { color: var(--on); } .badge.off { color: var(--muted); } .badge.offline { color: var(--warn); }
+.badge.moving { color: var(--accent); } .badge.alarm { color: var(--warn); } .badge.value { color: var(--text-2); }
+.back { font-size: 13px; text-decoration: none; display: inline-flex; gap: 6px; align-items: center; }
+.dev-head { padding: 18px; display: flex; flex-direction: column; gap: 14px; }
+.dev-head .title { display: flex; align-items: center; gap: 12px; }
+.dev-head .title h2 { font-size: 18px; }
+.dev-head .title .sub { color: var(--muted); font-size: 13px; }
+dl.info { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px 24px; margin: 0; }
+dl.info div { min-width: 0; }
+dl.info dt { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; }
+dl.info dd { margin: 2px 0 0; font-family: var(--mono); font-size: 13px; overflow-wrap: anywhere; }
+.timeline svg, .linechart svg { display: block; width: 100%; height: auto; }
+.timeline .legend { display: flex; gap: 16px; flex-wrap: wrap; font-size: 12px; color: var(--muted); }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; }
+.note { font-size: 12px; color: var(--muted); }
+tr.ev-minor td { color: var(--muted); font-size: 12px; }
+details.menu { position: relative; }
+details.menu > summary { list-style: none; cursor: pointer; color: var(--link); }
+details.menu > summary::-webkit-details-marker { display: none; }
+details.menu > summary::after { content: "\25BE"; margin-left: 8px; font-size: 11px; }
+.menu-list { position: absolute; right: 0; top: 40px; z-index: 10; min-width: 170px; display: flex; flex-direction: column;
+  background: var(--panel); border: 1px solid var(--control); border-radius: 6px; padding: 4px; box-shadow: 0 8px 24px rgba(0,0,0,.4); }
+.menu-list a { padding: 9px 12px; border-radius: 4px; font-size: 13px; text-decoration: none; }
+.menu-list a:hover, .menu-list a:focus-visible { background: #1f2630; }
+.dev-head .title { flex-wrap: wrap; }
+.dv-actions { margin-left: auto; display: flex; gap: 8px; }
+.charts.single { grid-template-columns: minmax(0, 1fr); }
+button.hbar { all: unset; box-sizing: border-box; display: grid; grid-template-columns: 180px minmax(0, 1fr) 64px; gap: 10px;
+  align-items: center; cursor: pointer; border-radius: 4px; padding: 2px 4px; margin: -2px -4px; }
+button.hbar:hover { background: #1a2029; }
+button.hbar:focus-visible { outline: 2px solid var(--accent); outline-offset: 0; }
+tr.clickable { cursor: pointer; }
+tr.clickable:hover td { background: #1a2029; }
+td a.dev-link { color: var(--text); text-decoration: none; font-weight: 500; }
+td a.dev-link:hover { color: var(--link); text-decoration: underline; }
+td a.dev-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 2px; }
+.ibar { display: grid; grid-template-columns: minmax(60px, 1fr) auto; align-items: center; gap: 8px; min-width: 150px; }
+.ibar .ibar-fill { display: block; height: 8px; background: var(--accent); border-radius: 2px; min-width: 1px; }
+.ibar .ibar-track, .ibar > .ibar-fill { grid-column: 1; }
+.ibar .num { font-family: var(--mono); text-align: right; }
+.ibar-track { height: 8px; background: var(--bg); border-radius: 2px; overflow: hidden; }
+.btn { height: 34px; padding: 0 12px; background: var(--panel); color: var(--text-2); border: 1px solid var(--control); border-radius: 6px; font: inherit; font-size: 13px; cursor: pointer; }
+.btn:hover { color: var(--text); border-color: var(--muted); }
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
+.btn.danger { color: var(--warn); }
+.g-row { display: grid; grid-template-columns: minmax(0, 2fr) minmax(150px, 1.4fr) 90px auto; gap: 16px; align-items: center; padding: 12px 18px; border-bottom: 1px solid var(--line-soft); }
+.g-row:last-child { border-bottom: 0; }
+.g-row .nm b, .g-ch .nm b { display: block; font-weight: 500; }
+.g-row .nm span, .g-ch .nm span { font-size: 12px; color: var(--muted); }
+.g-acts { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.g-rename { display: flex; gap: 6px; } .g-rename input { height: 32px; background: var(--bg); color: var(--text); border: 1px solid var(--control); border-radius: 6px; padding: 0 8px; }
+input[type=text] { height: 36px; padding: 0 10px; background: var(--panel); color: var(--text); border: 1px solid var(--control); border-radius: 6px; font: inherit; font-size: 13px; }
+.g-e-list { max-height: 55vh; overflow: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 2px 16px; padding: 10px 18px; }
+.g-ch { display: flex; align-items: center; gap: 10px; padding: 6px 4px; border-radius: 4px; cursor: pointer; }
+.g-ch:hover { background: #1a2029; }
+.g-ch input { width: 16px; height: 16px; accent-color: var(--accent); }
+.chk { font-size: 13px; color: var(--text-2); display: inline-flex; align-items: center; gap: 6px; }
+.table-head .left { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+
+@media (max-width: 900px) {
+  header, main, .error-wrap { padding-left: 16px; padding-right: 16px; }
+  .dev-row { grid-template-columns: 24px minmax(0, 1fr) auto; grid-template-areas: "i n s" "i m h"; row-gap: 2px; }
+  .dev-row .kicon { grid-area: i; }
+  .dev-row .nm { grid-area: n; }
+  .dev-row .st { grid-area: s; justify-self: end; }
+  .dev-row .meta { grid-area: m; }
+  .dev-row .hrs { grid-area: h; }
+  .dev-row .seen { display: none; }
+  .g-row { grid-template-columns: minmax(0, 1fr) auto; }
+  .g-row .ibar { grid-column: 1 / -1; }
+  .g-acts { grid-column: 1 / -1; justify-content: flex-start; }
+  .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+  .charts { grid-template-columns: minmax(0, 1fr); }
+  .tile .value { font-size: 26px; }
+}
+@media (max-width: 480px) {
+  .hbar, button.hbar { grid-template-columns: 110px minmax(0, 1fr) 56px; }
+  input[type=search] { width: 100%; }
+  .tile { padding: 12px 14px; }
+  .tile .value { font-size: 22px; }
+}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">
+    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" stroke-width="2" aria-hidden="true"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg>
+    <h1>shelly-monitor</h1>
+    <span class="ver" id="ver"></span>
+  </div>
+  <nav class="tabs" aria-label="Sezioni">
+    <a href="#/" id="nav-overview">Panoramica</a>
+    <a href="#/devices" id="nav-devices">Dispositivi</a>
+    <a href="#/groups" id="nav-groups">Gruppi</a>
+  </nav>
+  <div class="spacer"></div>
+  <div class="controls">
+    <span class="filter" id="home-f" hidden><label for="home">casa</label><select id="home"><option value="">Tutte</option></select></span>
+    <span class="filter" id="room-f" hidden><label for="room">stanza</label><select id="room"><option value="">Tutte</option></select></span>
+    <span class="filter" id="grp-f" hidden><label for="grp">gruppo</label><select id="grp"><option value="">Tutti</option></select></span>
+    <label for="from">dal</label>
+    <input id="from" type="date">
+    <label for="to">al</label>
+    <input id="to" type="date">
+    <details class="menu" id="export">
+      <summary class="btn-link">Esporta</summary>
+      <div class="menu-list">
+        <a id="exp-report-csv" href="/api/report.csv" download>Report CSV</a>
+        <a id="exp-samples-csv" href="/api/export.csv" download>Campioni CSV</a>
+        <a id="exp-report-pdf" href="/api/report.pdf" download>Report PDF</a>
+      </div>
+    </details>
+  </div>
+</header>
+
+<div class="error-wrap" id="error-wrap" hidden><div class="error" id="error" role="alert"></div></div>
+
+<main id="view-overview">
+  <section class="tiles" aria-label="Riepilogo">
+    <div class="panel tile primary"><span class="label">Ore accese</span><span class="value" id="t-hours">–</span><span class="sub" id="t-hours-sub">&nbsp;</span></div>
+    <div class="panel tile"><span class="label">Energia</span><span class="value" id="t-energy">–</span><span class="sub" id="t-energy-sub">&nbsp;</span></div>
+    <div class="panel tile"><span class="label">Accesi ora</span><span class="value" id="t-on">–</span><span class="sub" id="t-on-sub">&nbsp;</span></div>
+    <div class="panel tile"><span class="label">Ultimo campione</span><span class="value" id="t-last">–</span><span class="sub" id="t-last-sub">&nbsp;</span></div>
+  </section>
+
+  <section class="panel homes" id="homes-panel" hidden aria-labelledby="homes-title">
+    <h2 id="homes-title">Ore accese per casa</h2>
+    <div class="hbars" id="homebars"></div>
+  </section>
+
+  <section class="panel homes" id="groups-panel" hidden aria-labelledby="groups-title">
+    <h2 id="groups-title">Ore accese per gruppo</h2>
+    <div class="hbars" id="groupbars"></div>
+  </section>
+
+  <section class="charts single">
+    <div class="panel chart">
+      <h2>Ore accese al giorno · tutti i canali</h2>
+      <div class="vbars" id="vbars" role="img" aria-label="Ore accese al giorno"></div>
+      <div class="axis" id="axis" aria-hidden="true"></div>
+    </div>
+  </section>
+
+  <section class="panel" aria-labelledby="tbl-title">
+    <div class="table-head">
+      <h2 id="tbl-title">Canali</h2>
+      <label class="sr-only" for="q">Cerca</label>
+      <input id="q" type="search" placeholder="Cerca nome, casa, stanza, id o modello" autocomplete="off">
+    </div>
+    <div class="table-box" tabindex="0" aria-label="Tabella dettaglio, scorrevole">
+      <table>
+        <thead><tr id="thead"></tr></thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+  </section>
+</main>
+
+<main id="view-groups" hidden>
+  <section class="panel toolbar" aria-label="Gruppi personalizzati">
+    <div class="left"><h2>Gruppi personalizzati</h2><span class="note" id="g-ro"></span></div>
+    <form class="left" id="g-new" hidden>
+      <label class="sr-only" for="g-new-name">Nome del nuovo gruppo</label>
+      <input id="g-new-name" type="text" maxlength="60" placeholder="Nome del nuovo gruppo" required>
+      <button type="submit" class="btn primary">Nuovo gruppo</button>
+    </form>
+  </section>
+  <div id="g-list"></div>
+  <section class="panel" id="g-editor" hidden aria-labelledby="g-e-title">
+    <div class="table-head">
+      <h2 id="g-e-title">Membri</h2>
+      <div class="left">
+        <label class="sr-only" for="g-e-home">Casa</label><select id="g-e-home"><option value="">Tutte le case</option></select>
+        <label class="sr-only" for="g-e-room">Stanza</label><select id="g-e-room"><option value="">Tutte le stanze</option></select>
+        <label class="sr-only" for="g-e-q">Cerca canali</label><input id="g-e-q" type="search" placeholder="Cerca canali" autocomplete="off">
+        <label class="chk"><input type="checkbox" id="g-e-sel"> solo selezionati</label>
+      </div>
+    </div>
+    <div class="g-e-list" id="g-e-list"></div>
+    <div class="toolbar"><span class="count" id="g-e-count"></span>
+      <div class="left"><button type="button" class="btn" id="g-e-cancel">Annulla</button><button type="button" class="btn primary" id="g-e-save">Salva membri</button></div></div>
+  </section>
+</main>
+
+<main id="view-devices" hidden>
+  <section class="panel toolbar" aria-label="Filtri dispositivi">
+    <div class="left">
+      <div class="seg" id="devgroup-seg" role="group" aria-label="Raggruppa per">
+        <button type="button" data-by="room" aria-pressed="true">Stanza</button>
+        <button type="button" data-by="group" aria-pressed="false">Gruppo</button>
+        <button type="button" data-by="kind" aria-pressed="false">Tipo</button>
+      </div>
+      <label class="sr-only" for="dq">Cerca dispositivi</label>
+      <input id="dq" type="search" placeholder="Cerca nome, stanza, gruppo, modello" autocomplete="off">
+    </div>
+    <span class="count" id="dcount"></span>
+  </section>
+  <div id="dlist"></div>
+</main>
+
+<main id="view-device" hidden>
+  <a class="back" href="#/devices">&larr; Dispositivi</a>
+  <section class="panel dev-head" aria-labelledby="dv-name">
+    <div class="title"><span id="dv-icon"></span><div><h2 id="dv-name"></h2><div class="sub" id="dv-sub"></div></div>
+      <div class="dv-actions"><a class="btn-link" id="dv-csv" download>Esporta CSV</a><a class="btn-link" id="dv-pdf" download>PDF</a></div></div>
+    <dl class="info" id="dv-info"></dl>
+  </section>
+  <section class="tiles" id="dv-tiles" aria-label="Riepilogo periodo"></section>
+  <section class="panel chart timeline" id="dv-timeline-panel">
+    <h2 id="dv-timeline-title">Timeline</h2>
+    <div class="legend" id="dv-legend"></div>
+    <div id="dv-timeline"></div>
+  </section>
+  <section class="panel chart linechart" id="dv-line-panel" hidden>
+    <h2 id="dv-line-title">Valore</h2>
+    <div id="dv-line"></div>
+  </section>
+  <section class="panel chart" id="dv-daily-panel">
+    <h2 id="dv-daily-title">Ore accese al giorno</h2>
+    <div class="vbars" id="dv-vbars" role="img"></div>
+    <div class="axis" id="dv-axis" aria-hidden="true"></div>
+  </section>
+  <section class="panel" aria-labelledby="dv-tr-title">
+    <div class="table-head"><h2 id="dv-tr-title">Ultime 50 transizioni</h2><span class="note" id="dv-tr-note"></span></div>
+    <div class="table-box" tabindex="0" aria-label="Transizioni, scorrevole">
+      <table><thead><tr><th scope="col"><span class="th-cell">Data e ora</span></th><th scope="col"><span class="th-cell">Stato</span></th><th scope="col" class="num"><span class="th-cell">Durata</span></th></tr></thead>
+      <tbody id="dv-tr"></tbody></table>
+    </div>
+  </section>
+  <section class="panel" aria-labelledby="dv-ev-title">
+    <div class="table-head"><h2 id="dv-ev-title">Registro attività</h2>
+      <div class="left"><span class="note" id="dv-ev-note"></span><a class="btn-link" id="dv-ev-csv" download>CSV</a></div></div>
+    <div class="table-box" tabindex="0" aria-label="Registro attività dal cloud, scorrevole">
+      <table><thead><tr><th scope="col"><span class="th-cell">Data e ora</span></th><th scope="col"><span class="th-cell">Evento</span></th></tr></thead>
+      <tbody id="dv-ev"></tbody></table>
+    </div>
+  </section>
+</main>
+
+<script>
+(function () {
+  "use strict";
+  var NF1 = new Intl.NumberFormat("it-IT", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+  var NF2 = new Intl.NumberFormat("it-IT", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  var NF0 = new Intl.NumberFormat("it-IT", { maximumFractionDigits: 0 });
+  var NFwh = new Intl.NumberFormat("it-IT", { maximumFractionDigits: 1 });
+  var DAY = new Intl.DateTimeFormat("it-IT", { day: "numeric", month: "short" });
+  var TIME = new Intl.DateTimeFormat("it-IT", { hour: "2-digit", minute: "2-digit" });
+  var DATETIME = new Intl.DateTimeFormat("it-IT", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+  var DATETIME_S = new Intl.DateTimeFormat("it-IT", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit" });
+
+  var COLS = [
+    { key: "name", label: "Dispositivo" },
+    { key: "home", label: "Casa", multiHome: true },
+    { key: "room", label: "Stanza", withRooms: true },
+    { key: "channel", label: "Canale", cls: "mono dim" },
+    { key: "model", label: "Modello", cls: "mono dim" },
+    { key: "on_h", label: "Ore accese", num: true },
+    { key: "wh", label: "Wh", cls: "mono num", num: true },
+    { key: "state", label: "Stato" },
+    { key: "last_ts", label: "Ultimo campione", cls: "mono dim", num: true }
+  ];
+
+  var state = { homes: [], sortKey: "on_h", sortDir: "descending", rows: [], query: "" };
+  var $ = function (id) { return document.getElementById(id); };
+
+  function iso(d) {
+    var m = String(d.getMonth() + 1).padStart(2, "0"), dd = String(d.getDate()).padStart(2, "0");
+    return d.getFullYear() + "-" + m + "-" + dd;
+  }
+  function parseIso(s) { var p = s.split("-"); return new Date(+p[0], +p[1] - 1, +p[2]); }
+  function el(tag, cls, text) {
+    var e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text != null) e.textContent = text;
+    return e;
+  }
+  function fmtWh(wh) {
+    if (wh == null) return "–";
+    return Math.abs(wh) >= 1000 ? NF2.format(wh / 1000) + " kWh" : NFwh.format(wh) + " Wh";
+  }
+  function query() {
+    var q = "from=" + encodeURIComponent($("from").value) + "&to=" + encodeURIComponent($("to").value);
+    if ($("home").value) q += "&home=" + encodeURIComponent($("home").value);
+    if ($("room").value) q += "&room=" + encodeURIComponent($("room").value);
+    if ($("grp").value) q += "&grp=" + encodeURIComponent($("grp").value);
+    return q;
+  }
+  function multiHome() { return state.homes.length > 1 && !$("home").value; }
+  function hasRooms() { return state.homes.some(function (h) { return h.room_count > 0; }); }
+
+  function fillSelect(sel, values) {
+    var keep = sel.value;
+    while (sel.options.length > 1) sel.remove(1);
+    values.forEach(function (v) { var o = el("option", null, v); o.value = v; sel.appendChild(o); });
+    sel.value = values.indexOf(keep) >= 0 ? keep : "";
+  }
+  function renderFilters() {
+    fillSelect($("home"), state.homes.map(function (h) { return h.home; }));
+    $("home-f").hidden = state.homes.length <= 1;
+    var rooms = {};
+    state.homes.forEach(function (h) {
+      if (!$("home").value || h.home === $("home").value) h.rooms.forEach(function (r) { rooms[r] = 1; });
+    });
+    var list = Object.keys(rooms).sort(function (a, b) { return a.localeCompare(b, "it"); });
+    fillSelect($("room"), list);
+    $("room-f").hidden = !list.length;
+  }
+  function getJSON(path) {
+    return fetch(path, { cache: "no-store" }).then(function (r) {
+      return r.json().catch(function () { return {}; }).then(function (body) {
+        if (!r.ok) throw new Error(body.error || ("HTTP " + r.status));
+        return body;
+      });
+    });
+  }
+
+  function renderSummary(s) {
+    $("ver").textContent = s.version ? "v" + s.version : "";
+    $("t-hours").textContent = NF1.format(s.on_hours || 0);
+    $("t-hours-sub").textContent = "su " + NF0.format(s.channels) + " canali" + (s.days ? " · " + NF0.format(s.days) + " giorni" : "");
+    $("t-energy").textContent = fmtWh(s.wh);
+    var c = s.wh_counter_channels, e = s.wh_estimate_channels;
+    $("t-energy-sub").textContent = s.wh == null ? "nessun dato di potenza"
+      : c && e ? "da contatore su " + c + " canali, stima su " + e
+      : c ? "da contatore su " + c + " canali" : "stima su " + e + " canali";
+    var on = $("t-on"); on.textContent = NF0.format(s.channels_on) + " ";
+    on.appendChild(el("small", null, "/ " + NF0.format(s.channels)));
+    $("t-on-sub").textContent = !s.devices ? "nessun dispositivo"
+      : s.devices_offline === 1 ? "1 dispositivo offline"
+      : s.devices_offline ? s.devices_offline + " dispositivi offline" : "tutti i dispositivi online";
+    if (s.last_sample_ts) {
+      var d = new Date(s.last_sample_ts * 1000);
+      $("t-last").textContent = iso(d) === iso(new Date()) ? TIME.format(d) : DATETIME.format(d);
+    } else {
+      $("t-last").textContent = "–";
+    }
+    $("t-last-sub").textContent = "intervallo " + s.interval_s + " s · " + NF0.format(s.samples) + " campioni";
+  }
+
+  function label(r, withHome) {
+    // unnamed channels show "id:channel" so that channels of one device stay distinguishable
+    var base = r.name && r.name !== r.device_id ? r.name : r.device_id + ":" + r.channel;
+    return withHome && multiHome() ? base + " · " + r.home : base;
+  }
+
+  function renderHomeBars(rows) {
+    $("homes-panel").hidden = !multiHome();
+    if (!multiHome()) return;
+    var homes = rows.map(function (r) {
+      return { name: r.home, on_h: r.on_h, onclick: function () { $("home").value = r.home; renderFilters(); load(); } };
+    })
+      .sort(function (a, b) { return b.on_h - a.on_h; });
+    renderBars($("homebars"), homes, homes.length);
+  }
+
+  function renderBars(box, chans, limit) {
+    box.textContent = "";
+    if (!chans.length) { box.appendChild(el("div", "empty", "(nessun dato)")); return; }
+    var top = chans.slice(0, limit);
+    if (chans.length > limit) {
+      var rest = chans.slice(limit).reduce(function (a, c) { return a + c.on_h; }, 0);
+      top.push({ name: "altri (" + (chans.length - limit) + ")", on_h: rest, other: true });
+    }
+    // scale on the named channels: the "altri" aggregate would flatten every other bar
+    var max = chans[0].on_h || 1;
+    top.forEach(function (c) {
+      var row = el(c.onclick ? "button" : "div", "hbar" + (c.other ? " other" : ""));
+      if (c.onclick) {
+        row.type = "button"; row.addEventListener("click", c.onclick);
+        row.setAttribute("aria-label", c.name + ", " + NF1.format(c.on_h) + " ore: filtra");
+      }
+      var name = el("span", "name", c.name); name.title = c.name;
+      var track = el("div", "track"), fill = el("div", "fill");
+      fill.style.width = Math.min(100, c.on_h / max * 100).toFixed(1) + "%";
+      track.appendChild(fill);
+      track.setAttribute("aria-hidden", "true");
+      row.appendChild(name); row.appendChild(track); row.appendChild(el("span", "num", NF1.format(c.on_h)));
+      box.appendChild(row);
+    });
+  }
+
+  function renderVBars(days, box, axis) {
+    box = box || $("vbars"); axis = axis || $("axis");
+    box.textContent = ""; axis.textContent = "";
+    var total = days.reduce(function (a, d) { return a + d.on_h; }, 0);
+    if (!days.length || total === 0) {
+      box.appendChild(el("div", "empty", "(nessun dato)"));
+      box.setAttribute("aria-label", "Ore accese al giorno: nessun dato");
+      return;
+    }
+    var max = days.reduce(function (a, d) { return Math.max(a, d.on_h); }, 0) || 1;
+    days.forEach(function (d) {
+      var col = el("div", "col"), bar = el("div", "bar");
+      bar.style.height = (d.on_h / max * 100).toFixed(1) + "%";
+      col.title = DAY.format(parseIso(d.date)) + ": " + NF1.format(d.on_h) + " h";
+      col.appendChild(bar); box.appendChild(col);
+    });
+    box.setAttribute("aria-label", "Ore accese al giorno, " + days.length + " giorni, massimo " + NF1.format(max) + " ore");
+    var picks = days.length > 2 ? [days[0], days[Math.floor((days.length - 1) / 2)], days[days.length - 1]] : days;
+    picks.forEach(function (d) { axis.appendChild(el("span", null, DAY.format(parseIso(d.date)))); });
+  }
+
+  function visibleCols() {
+    return COLS.filter(function (c) {
+      return (!c.multiHome || multiHome()) && (!c.withRooms || hasRooms());
+    });
+  }
+
+  function renderHead() {
+    var tr = $("thead"); tr.textContent = "";
+    visibleCols().forEach(function (c) {
+      var th = el("th", c.num ? "num" : null);
+      th.scope = "col";
+      th.setAttribute("aria-sort", state.sortKey === c.key ? state.sortDir : "none");
+      var b = el("button", null, c.label);
+      b.type = "button";
+      b.addEventListener("click", function () {
+        if (state.sortKey === c.key) state.sortDir = state.sortDir === "ascending" ? "descending" : "ascending";
+        else { state.sortKey = c.key; state.sortDir = c.num ? "descending" : "ascending"; }
+        renderHead(); renderTable();
+      });
+      th.appendChild(b); tr.appendChild(th);
+    });
+  }
+
+  function sortValue(r, key) {
+    if (key === "state") return r.online === false ? 2 : r.state === "on" ? 0 : 1;
+    var v = r[key];
+    return v == null ? "" : v;
+  }
+
+  function renderTable() {
+    var body = $("tbody"); body.textContent = "";
+    var cols = visibleCols();
+    var q = state.query.trim().toLowerCase();
+    var rows = state.rows.filter(function (r) {
+      return !q || [r.name, r.room, r.home, r.device_id, r.model].some(function (v) { return v && String(v).toLowerCase().indexOf(q) >= 0; });
+    });
+    var dir = state.sortDir === "ascending" ? 1 : -1, key = state.sortKey;
+    rows.sort(function (a, b) {
+      var x = sortValue(a, key), y = sortValue(b, key);
+      if (typeof x === "number" && typeof y === "number") return (x - y) * dir;
+      return String(x).localeCompare(String(y), "it", { numeric: true }) * dir;
+    });
+    if (!rows.length) {
+      var tr = el("tr"), td = el("td", "empty", state.rows.length ? "(nessun risultato)" : "(nessun dato)");
+      td.colSpan = cols.length; tr.appendChild(td); body.appendChild(tr);
+      return;
+    }
+    var maxH = state.rows.reduce(function (m, r) { return Math.max(m, r.on_h); }, 0) || 1;
+    rows.forEach(function (r) {
+      var tr = el("tr", "clickable");
+      tr.addEventListener("click", function (e) { if (!e.target.closest("a")) location.hash = devHref(r); });
+      cols.forEach(function (c) {
+        var td = el("td", c.cls || null);
+        if (c.key === "on_h") {
+          var bar = el("div", "ibar"), track = el("div", "ibar-track"), fill = el("span", "ibar-fill");
+          fill.style.width = (r.on_h / maxH * 100).toFixed(1) + "%"; track.appendChild(fill);
+          track.setAttribute("aria-hidden", "true");
+          bar.appendChild(track); bar.appendChild(el("span", "num", NF2.format(r.on_h)));
+          td.appendChild(bar);
+        } else if (c.key === "last_ts") td.textContent = r.last_ts ? seenText(r.last_ts) : "–";
+        else if (c.key === "wh") {
+          td.textContent = r.wh == null ? "–" : NFwh.format(r.wh);
+          if (r.wh_source === "estimate") { td.appendChild(document.createTextNode(" ")); td.appendChild(el("span", "est", "stima")); }
+        } else if (c.key === "state") {
+          var cls = r.online === false ? "offline" : r.state === "on" ? "on" : "off";
+          var text = r.online === false ? "OFFLINE" : r.state === "on" ? "ON" : r.state === "off" ? "OFF" : "–";
+          var s = el("span", "state " + cls); s.appendChild(el("span", "dot")); s.appendChild(document.createTextNode(text));
+          td.appendChild(s);
+        } else if (c.key === "name") {
+          var a = el("a", "dev-link", label(r)); a.href = devHref(r); a.title = r.device_id + ":" + r.channel;
+          td.appendChild(a);
+        } else td.textContent = r[c.key] == null ? "–" : String(r[c.key]);
+        tr.appendChild(td);
+      });
+      body.appendChild(tr);
+    });
+  }
+
+  function updateExportLinks() {
+    var q = query();
+    $("exp-report-csv").href = "/api/report.csv?" + q + "&group=total";
+    $("exp-samples-csv").href = "/api/export.csv?" + q;
+    $("exp-report-pdf").href = "/api/report.pdf?" + q;
+  }
+
+  function showError(msg) {
+    $("error").textContent = msg;
+    $("error-wrap").hidden = !msg;
+  }
+
+  var seq = 0;
+  function loadOverview() {
+    var from = $("from").value, to = $("to").value;
+    updateExportLinks();
+    if (!from || !to) return;
+    var my = ++seq, q = query();
+    document.querySelector("main").setAttribute("aria-busy", "true");
+    var wantHomes = multiHome();
+    var dates = "from=" + encodeURIComponent(from) + "&to=" + encodeURIComponent(to);
+    Promise.all([
+      getJSON("/api/summary?" + q),
+      getJSON("/api/report?" + q + "&group=total"),
+      getJSON("/api/daily?" + q),
+      wantHomes ? getJSON("/api/report?" + q + "&group=total&by=home") : Promise.resolve([]),
+      getJSON("/api/custom-groups?" + dates)
+    ]).then(function (res) {
+      if (my !== seq) return;
+      showError("");
+      renderSummary(res[0]);
+      renderHomeBars(res[3]);
+      renderGroupBars(res[4]);
+      state.rows = res[1];
+      renderVBars(res[2]);
+      renderHead(); renderTable();
+      document.querySelector("main").setAttribute("aria-busy", "false");
+    }).catch(function (err) {
+      if (my !== seq) return;
+      document.querySelector("main").setAttribute("aria-busy", "false");
+      showError("Errore nel caricamento dei dati: " + err.message);
+    });
+  }
+
+  // ---- devices & device detail ------------------------------------------------------
+  var SVGNS = "http://www.w3.org/2000/svg";
+  var ICONS = {
+    switch: "M12 3v8M7.1 6.6a7 7 0 1 0 9.8 0",
+    light: "M9 18h6M10 21h4M12 3a6 6 0 0 0-3.6 10.8c.7.6 1.1 1.3 1.1 2.2h5c0-.9.4-1.6 1.1-2.2A6 6 0 0 0 12 3z",
+    rgbw: "M12 3a9 9 0 1 0 0 18c1 0 1.6-.7 1.6-1.5 0-.9-.8-1.3-.8-2.1 0-.8.7-1.4 1.6-1.4H16a5 5 0 0 0 5-5c0-4.4-4-8-9-8zM7.5 11h.01M10 7h.01M14.5 7h.01",
+    cover: "M4 4h16M5 4v13h14V4M5 8h14M5 12h14M12 17v3",
+    sensor: "M14 14.8V5a2 2 0 0 0-4 0v9.8a4 4 0 1 0 4 0zM12 17v-5",
+    input: "M7 8h10a4 4 0 0 1 0 8H7a4 4 0 0 1 0-8zM8.5 12h.01",
+    unknown: "M9.1 9a3 3 0 0 1 5.8 1c0 2-3 2.5-3 4M12 17h.01M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z"
+  };
+  var KIND_LABEL = { switch: "Interruttore", light: "Luce", rgbw: "Luce RGBW", cover: "Tapparella",
+                     sensor: "Sensore", input: "Ingressi", unknown: "Sconosciuto" };
+  var ON_KINDS = { switch: 1, light: 1, rgbw: 1 };
+  var dev = { by: "room", rows: [], query: "" };
+
+  function icon(kind, on) {
+    var svg = document.createElementNS(SVGNS, "svg");
+    svg.setAttribute("viewBox", "0 0 24 24"); svg.setAttribute("fill", "none"); svg.setAttribute("stroke", "currentColor");
+    svg.setAttribute("stroke-width", "1.8"); svg.setAttribute("stroke-linecap", "round"); svg.setAttribute("stroke-linejoin", "round");
+    svg.setAttribute("class", "kicon" + (on ? " on" : "")); svg.setAttribute("aria-hidden", "true");
+    var p = document.createElementNS(SVGNS, "path"); p.setAttribute("d", ICONS[kind] || ICONS.unknown);
+    svg.appendChild(p);
+    return svg;
+  }
+  function devLabel(d) { return d.name || (d.device_id + ":" + d.channel); }
+  function devHref(d) {
+    return "#/device/" + encodeURIComponent(d.home) + "/" + encodeURIComponent(d.device_id) + "/" + d.channel;
+  }
+  function sensorText(d, value) {
+    if (value == null) return "–";
+    var t = String(d.type || d.model || "");
+    if (/^(S4SN|SHWT)/.test(t)) return value ? "allarme" : "asciutto";
+    if (d.channel >= 1000) return NF0.format(value) + " %";
+    return NF1.format(value) + " °C";
+  }
+  function stateOf(d) {  // -> {text, cls, on}
+    if (d.online === false) return { text: "offline", cls: "offline" };
+    if (d.kind === "sensor") {
+      var alarm = /^(S4SN|SHWT)/.test(String(d.type || "")) && d.value;
+      return { text: sensorText(d, d.value), cls: alarm ? "alarm" : "value" };
+    }
+    if (d.kind === "cover") {
+      var pos = d.value == null ? "" : NF0.format(d.value) + " %";
+      return d.state === "moving" ? { text: "in movimento" + (pos ? " · " + pos : ""), cls: "moving", on: true }
+        : { text: pos || "–", cls: "value" };
+    }
+    if (d.kind === "input") return { text: d.online ? "online" : "–", cls: "off" };
+    if (d.state === "on") {
+      var b = d.kind !== "switch" && d.value != null ? " · " + NF0.format(d.value) + " %" : "";
+      return { text: "ON" + b, cls: "on", on: true };
+    }
+    if (d.state === "off") return { text: "OFF", cls: "off" };
+    return { text: "–", cls: "off" };
+  }
+  function badge(st) {
+    var s = el("span", "badge " + st.cls); s.appendChild(el("span", "dot")); s.appendChild(document.createTextNode(st.text));
+    return s;
+  }
+  function seenText(ts) {
+    if (!ts) return "mai";
+    var d = new Date(ts * 1000);
+    return iso(d) === iso(new Date()) ? TIME.format(d) : DATETIME.format(d);
+  }
+
+  function loadDevices() {
+    var my = ++seq;
+    getJSON("/api/devices?" + query()).then(function (rows) {
+      if (my !== seq) return;
+      showError("");
+      dev.rows = rows; renderDevices();
+    }).catch(function (err) { if (my === seq) showError("Errore nel caricamento dei dispositivi: " + err.message); });
+  }
+
+  function renderDevices() {
+    var box = $("dlist"); box.textContent = "";
+    var q = dev.query.trim().toLowerCase(), multi = multiHome();
+    var rows = dev.rows.filter(function (d) {
+      return !q || [devLabel(d), d.room, d.home, d.device_id, d.type, d.model, KIND_LABEL[d.kind]].concat(d.groups || [])
+        .some(function (v) { return v && String(v).toLowerCase().indexOf(q) >= 0; });
+    });
+    var online = rows.filter(function (d) { return d.online; }).length;
+    $("dcount").textContent = NF0.format(rows.length) + " canali · " + NF0.format(online) + " online · " +
+      NF0.format(rows.length - online) + " offline o sconosciuti";
+    if (!rows.length) { var e = el("div", "panel empty", dev.rows.length ? "(nessun risultato)" : "(nessun dato)"); e.style.padding = "18px"; box.appendChild(e); return; }
+    var sections = {}, order = [];
+    function put(key, d) { if (!sections[key]) { sections[key] = []; order.push(key); } sections[key].push(d); }
+    rows.forEach(function (d) {
+      var prefix = multi && dev.by !== "kind" ? d.home + " · " : "";
+      if (dev.by === "group") {
+        if (d.groups && d.groups.length) d.groups.forEach(function (g) { put(prefix + g, d); });
+        else put(prefix + "Senza gruppo", d);
+      } else if (dev.by === "kind") put(KIND_LABEL[d.kind] || d.kind, d);
+      else put(prefix + (d.room || "Senza stanza"), d);
+    });
+    order.sort(function (a, b) {
+      var na = /Senza /.test(a), nb = /Senza /.test(b);
+      return na !== nb ? (na ? 1 : -1) : a.localeCompare(b, "it");
+    });
+    order.forEach(function (key) {
+      var sec = el("section", "panel dev-group"), h = el("h2", null, key);
+      h.appendChild(el("span", "count", NF0.format(sections[key].length)));
+      sec.appendChild(h);
+      sections[key].sort(function (a, b) { return devLabel(a).localeCompare(devLabel(b), "it", { numeric: true }); })
+        .forEach(function (d) { sec.appendChild(devRow(d, multi)); });
+      box.appendChild(sec);
+    });
+  }
+
+  function devRow(d, multi) {
+    var st = stateOf(d), a = el("a", "dev-row");
+    a.href = devHref(d);
+    a.appendChild(icon(d.kind, st.on));
+    var nm = el("div", "nm"); nm.appendChild(el("b", null, devLabel(d)));
+    nm.appendChild(el("span", null, [d.type || d.model || "?", "ch " + d.channel, multi && dev.by === "kind" ? d.home : null]
+      .filter(Boolean).join(" · ")));
+    a.appendChild(nm);
+    a.appendChild(el("span", "meta", [KIND_LABEL[d.kind], dev.by !== "room" ? d.room : null, dev.by !== "group" && d.groups && d.groups.length ? d.groups.join(", ") : null]
+      .filter(Boolean).join(" · ")));
+    var stEl = el("span", "st"); stEl.appendChild(badge(st)); a.appendChild(stEl);
+    a.appendChild(el("span", "num hrs", ON_KINDS[d.kind] && d.on_h != null ? NF1.format(d.on_h) + " h" : d.kind === "cover" && d.on_h ? NF1.format(d.on_h) + " h mov." : ""));
+    a.appendChild(el("span", "meta seen", d.kind === "input" ? "–" : seenText(d.last_seen)));
+    a.setAttribute("aria-label", devLabel(d) + ", " + st.text);
+    return a;
+  }
+
+  // ---- device detail ------------------------------------------------------------------
+  function dayStart(isoDay) { return parseIso(isoDay).getTime() / 1000; }
+
+  function segments(d) {  // [{from, to, kind: on|off|offline}] from compressed transitions
+    var tr = d.transitions, out = [], end = (d.last_ts || 0) + d.interval_s;
+    for (var i = 0; i < tr.length; i++) {
+      var t = tr[i], to = i + 1 < tr.length ? tr[i + 1].ts : end;
+      if (t.gap) continue;
+      var k = !t.online ? "offline" : t.is_on ? "on" : "off";
+      if (to > t.ts) out.push({ from: t.ts, to: to, kind: k, value: t.value });
+    }
+    return out;
+  }
+
+  var SEG_COLOR = { on: "var(--accent)", off: "#232a33", offline: "var(--warn)" };
+  function renderTimeline(d, segs) {
+    var box = $("dv-timeline"); box.textContent = "";
+    // rows from the first day with data: days before the device was monitored would be empty
+    var firstDay = d.first_ts ? iso(new Date(d.first_ts * 1000)) : null;
+    var days = d.daily.map(function (x) { return x.day; }).filter(function (x) { return !firstDay || x >= firstDay; });
+    if (!segs.length) { box.appendChild(el("div", "empty", "(nessun dato nel periodo)")); return; }
+    // drawn at the real pixel width so that 11px labels stay 11px on phones
+    var W = Math.max(320, box.clientWidth || 1000), L = 64, rowH = 14, gap = 6, H = days.length * (rowH + gap) + 18;
+    var svg = document.createElementNS(SVGNS, "svg");
+    svg.setAttribute("viewBox", "0 0 " + W + " " + H); svg.setAttribute("role", "img");
+    svg.setAttribute("aria-label", "Timeline per giorno, " + days.length + " giorni");
+    function node(tag, attrs, text) {
+      var n = document.createElementNS(SVGNS, tag);
+      Object.keys(attrs).forEach(function (k) { n.setAttribute(k, attrs[k]); });
+      if (text != null) n.textContent = text;
+      return n;
+    }
+    [0, 6, 12, 18, 24].forEach(function (hh) {
+      var x = L + (W - L) * hh / 24;
+      svg.appendChild(node("text", { x: x, y: H - 4, "font-size": 11, fill: "#9aa4b2", "text-anchor": hh === 0 ? "start" : hh === 24 ? "end" : "middle", "font-family": "ui-monospace, Menlo, monospace" }, String(hh).padStart(2, "0") + ":00"));
+    });
+    days.forEach(function (day, r) {
+      var y = r * (rowH + gap), s0 = dayStart(day), s1 = s0 + 86400;
+      svg.appendChild(node("text", { x: 0, y: y + rowH - 3, "font-size": 11, fill: "#9aa4b2", "font-family": "ui-monospace, Menlo, monospace" }, DAY.format(parseIso(day))));
+      svg.appendChild(node("rect", { x: L, y: y, width: W - L, height: rowH, rx: 2, fill: "#0f1216" }));
+      segs.forEach(function (sg) {
+        var a = Math.max(sg.from, s0), b = Math.min(sg.to, s1);
+        if (b <= a) return;
+        var x = L + (W - L) * (a - s0) / 86400, w = Math.max(0.8, (W - L) * (b - a) / 86400);
+        var rect = node("rect", { x: x, y: y, width: w, height: rowH, fill: SEG_COLOR[sg.kind], opacity: sg.kind === "offline" ? 0.6 : 1 });
+        var lbl = sg.kind === "on" ? (d.kind === "cover" ? "in movimento" : "ON") : sg.kind === "off" ? (d.kind === "cover" ? "ferma" : "OFF") : "offline";
+        rect.appendChild(node("title", {}, TIME.format(new Date(a * 1000)) + "–" + TIME.format(new Date(b * 1000)) + " " + lbl));
+        svg.appendChild(rect);
+      });
+    });
+    box.appendChild(svg);
+  }
+
+  function renderLine(d) {
+    var box = $("dv-line"); box.textContent = "";
+    var pts = d.transitions.filter(function (t) { return !t.gap && t.value != null; });
+    if (!pts.length) { box.appendChild(el("div", "empty", "(nessun valore nel periodo)")); return; }
+    var W = Math.max(320, box.clientWidth || 1000), H = 220, L = 52, B = 22, T = 8;
+    var t0 = pts[0].ts, t1 = Math.max(d.last_ts || pts[pts.length - 1].ts, t0 + 1);
+    var vmin = Math.min.apply(null, pts.map(function (p) { return p.value; }));
+    var vmax = Math.max.apply(null, pts.map(function (p) { return p.value; }));
+    if (vmax === vmin) { vmax += 1; vmin -= 1; }
+    function X(ts) { return L + (W - L) * (ts - t0) / (t1 - t0); }
+    function Y(v) { return T + (H - T - B) * (1 - (v - vmin) / (vmax - vmin)); }
+    var path = "", prev = null;  // step line: values hold until the next change; gaps break the line
+    d.transitions.forEach(function (t) {
+      if (t.gap) { if (prev) path += "H" + X(t.ts).toFixed(1); prev = null; return; }
+      if (t.value == null) return;
+      path += prev ? "H" + X(t.ts).toFixed(1) + "V" + Y(t.value).toFixed(1) : "M" + X(t.ts).toFixed(1) + " " + Y(t.value).toFixed(1);
+      prev = t;
+    });
+    if (prev) path += "H" + X(t1).toFixed(1);
+    var svg = document.createElementNS(SVGNS, "svg");
+    svg.setAttribute("viewBox", "0 0 " + W + " " + H); svg.setAttribute("role", "img");
+    svg.setAttribute("aria-label", "Andamento del valore, min " + NF1.format(vmin) + " max " + NF1.format(vmax));
+    function node(tag, attrs, text) {
+      var n = document.createElementNS(SVGNS, tag);
+      Object.keys(attrs).forEach(function (k) { n.setAttribute(k, attrs[k]); });
+      if (text != null) n.textContent = text;
+      return n;
+    }
+    [vmin, (vmin + vmax) / 2, vmax].forEach(function (v) {
+      svg.appendChild(node("line", { x1: L, x2: W, y1: Y(v), y2: Y(v), stroke: "#22272e" }));
+      svg.appendChild(node("text", { x: L - 6, y: Y(v) + 4, "font-size": 11, fill: "#9aa4b2", "text-anchor": "end", "font-family": "ui-monospace, Menlo, monospace" }, NF1.format(v)));
+    });
+    [t0, (t0 + t1) / 2, t1].forEach(function (ts, i) {
+      svg.appendChild(node("text", { x: X(ts), y: H - 4, "font-size": 11, fill: "#9aa4b2", "text-anchor": ["start", "middle", "end"][i], "font-family": "ui-monospace, Menlo, monospace" }, DATETIME.format(new Date(ts * 1000))));
+    });
+    svg.appendChild(node("path", { d: path, fill: "none", stroke: "#38bdf8", "stroke-width": 2, "vector-effect": "non-scaling-stroke" }));
+    box.appendChild(svg);
+  }
+
+  function durText(sec) {
+    if (sec == null) return "in corso";
+    if (sec < 60) return NF0.format(sec) + " s";
+    var m = Math.round(sec / 60);
+    if (m < 60) return m + " min";
+    var h = Math.floor(m / 60);
+    return h < 48 ? h + " h " + String(m % 60).padStart(2, "0") + " min" : NF1.format(h / 24) + " g";
+  }
+
+  function renderDevice(d) {
+    var st = stateOf(d);
+    var ic = $("dv-icon"); ic.textContent = ""; ic.appendChild(icon(d.kind, st.on));
+    $("dv-name").textContent = devLabel(d);
+    $("dv-sub").textContent = [d.home, d.room || "senza stanza", KIND_LABEL[d.kind]].join(" · ");
+    var info = $("dv-info"); info.textContent = "";
+    [["Stato", null], ["Online", d.online == null ? "–" : d.online ? "sì" : "no"], ["Ultimo campione", seenText(d.last_seen)],
+     ["Modello", d.type || d.model || "–"], ["Gen", d.gen || "–"], ["ID", d.device_id], ["Canale", String(d.channel)],
+     ["Tipo", KIND_LABEL[d.kind] || d.kind], ["Gruppi cloud", d.groups && d.groups.length ? d.groups.join(", ") : "–"],
+     ["Gruppi personali", d.custom_groups && d.custom_groups.length ? d.custom_groups.join(", ") : "–"]
+    ].forEach(function (kv) {
+      var div = el("div"); div.appendChild(el("dt", null, kv[0]));
+      var dd = el("dd"); if (kv[1] == null) dd.appendChild(badge(st)); else dd.textContent = kv[1];
+      div.appendChild(dd); info.appendChild(div);
+    });
+    var sensor = d.kind === "sensor", cover = d.kind === "cover";
+    var segs = segments(d);
+    var onH = d.daily.reduce(function (a, x) { return a + x.on_h; }, 0);
+    var whs = d.daily.filter(function (x) { return x.wh != null; });
+    var tiles = $("dv-tiles"); tiles.textContent = "";
+    function tile(label, value, sub, primary) {
+      var t = el("div", "panel tile" + (primary ? " primary" : ""));
+      t.appendChild(el("span", "label", label)); t.appendChild(el("span", "value", value)); t.appendChild(el("span", "sub", sub || " "));
+      tiles.appendChild(t);
+    }
+    var vals = d.transitions.filter(function (t) { return !t.gap && t.value != null; }).map(function (t) { return t.value; });
+    if (sensor) {
+      tile("Ultimo valore", sensorText(d, d.value), seenText(d.last_seen), true);
+      tile("Minimo", vals.length ? sensorText(d, Math.min.apply(null, vals)) : "–", "nel periodo");
+      tile("Massimo", vals.length ? sensorText(d, Math.max.apply(null, vals)) : "–", "nel periodo");
+    } else {
+      tile(cover ? "Ore in movimento" : "Ore accese", NF1.format(onH), "su " + d.daily.length + " giorni", true);
+      tile("Energia", whs.length ? fmtWh(whs.reduce(function (a, x) { return a + x.wh; }, 0)) : "–", whs.length ? "" : "nessun dato di potenza");
+      tile("Accensioni", NF0.format(segs.filter(function (s) { return s.kind === "on"; }).length), cover ? "movimenti nel periodo" : "nel periodo");
+    }
+    tile("Campioni", NF0.format(d.samples), "intervallo " + d.interval_s + " s");
+
+    $("dv-timeline-panel").hidden = sensor;
+    $("dv-daily-panel").hidden = sensor;
+    $("dv-line-panel").hidden = !(sensor || cover);
+    $("dv-line-title").textContent = cover ? "Posizione (%)" : "Valore";
+    $("dv-timeline-title").textContent = cover ? "Timeline movimento" : "Timeline ON/OFF";
+    $("dv-daily-title").textContent = cover ? "Ore in movimento al giorno" : "Ore accese al giorno";
+    var lg = $("dv-legend"); lg.textContent = "";
+    [["on", cover ? "in movimento" : "ON"], ["off", cover ? "ferma" : "OFF"], ["offline", "offline"]].forEach(function (x) {
+      var s = el("span"); var i = el("i"); i.style.background = SEG_COLOR[x[0]]; s.appendChild(i); s.appendChild(document.createTextNode(x[1])); lg.appendChild(s);
+    });
+    lg.appendChild(el("span", null, "vuoto = nessun dato"));
+    if (!sensor) {
+      renderTimeline(d, segs);
+      renderVBars(d.daily.map(function (x) { return { date: x.day, on_h: x.on_h }; }), $("dv-vbars"), $("dv-axis"));
+    }
+    if (sensor || cover) renderLine(d);
+
+    var body = $("dv-tr"); body.textContent = "";
+    var tr = d.transitions, last = tr.slice(-50).reverse();
+    $("dv-tr-note").textContent = d.truncated ? "periodo lungo: transizioni campionate" : NF0.format(tr.length) + " nel periodo";
+    if (!last.length) { var r0 = el("tr"), c0 = el("td", "empty", "(nessun dato)"); c0.colSpan = 3; r0.appendChild(c0); body.appendChild(r0); }
+    last.forEach(function (t) {
+      var idx = tr.indexOf(t), next = tr[idx + 1];
+      var row = el("tr");
+      row.appendChild(el("td", "mono", DATETIME.format(new Date(t.ts * 1000))));
+      var c = el("td");
+      if (t.gap) c.appendChild(el("span", "muted", "nessun dato"));
+      else if (!t.online) c.appendChild(badge({ text: "offline", cls: "offline" }));
+      else if (sensor) c.textContent = sensorText(d, t.value);
+      else if (cover) c.appendChild(badge(t.is_on ? { text: "in movimento", cls: "moving" } : { text: (t.value == null ? "ferma" : NF0.format(t.value) + " %"), cls: "value" }));
+      else c.appendChild(badge(t.is_on ? { text: "ON" + (t.value != null && d.kind !== "switch" ? " · " + NF0.format(t.value) + " %" : ""), cls: "on" } : { text: "OFF", cls: "off" }));
+      row.appendChild(c);
+      row.appendChild(el("td", "mono num", durText(next ? next.ts - t.ts : null)));
+      body.appendChild(row);
+    });
+  }
+
+
+  // activity log: e=1 ON/OFF (and e=5 cover) in evidence, e=13 input and e=8 brightness in a secondary tone
+  var EV_SHOWN = { turn: 1, cover: 1, input: 1, brightness: 1 };
+  var COVER_STATE = { open: "aperta", closed: "chiusa", opening: "in apertura", closing: "in chiusura", stopped: "ferma" };
+  var INPUT_TEXT = { S: "pressione breve", L: "pressione lunga", SS: "doppia pressione", SSS: "tripla pressione" };
+
+  function renderEvents(d) {
+    var body = $("dv-ev"); body.textContent = "";
+    var rows = d.events.filter(function (e) { return EV_SHOWN[e.kind]; });
+    $("dv-ev-note").textContent = NF0.format(d.total) + " eventi nel periodo" + (d.truncated ? " · ultimi " + NF0.format(d.limit) : "");
+    if (!rows.length) { var r0 = el("tr"), c0 = el("td", "empty", "(nessun evento registrato)"); c0.colSpan = 2; r0.appendChild(c0); body.appendChild(r0); }
+    rows.forEach(function (e) {
+      var minor = e.kind === "input" || e.kind === "brightness";
+      var row = el("tr", minor ? "ev-minor" : null);
+      row.appendChild(el("td", "mono", DATETIME_S.format(new Date(e.ts_ms))));
+      var c = el("td");
+      if (e.kind === "turn") c.appendChild(badge(e.is_on ? { text: "ON", cls: "on" } : { text: "OFF", cls: "off" }));
+      else if (e.kind === "cover") c.appendChild(badge({ text: COVER_STATE[e.arg] || String(e.arg), cls: e.arg === "opening" || e.arg === "closing" ? "moving" : "value" }));
+      else if (e.kind === "brightness") c.textContent = "luminosità " + (e.arg == null ? "–" : NF0.format(e.arg) + " %");
+      else c.textContent = "input: " + (typeof e.arg === "boolean" ? (e.arg ? "attivo" : "inattivo") : (INPUT_TEXT[e.arg] || String(e.arg))) +
+        (e.source === "input" ? " (fisico)" : "");
+      row.appendChild(c);
+      body.appendChild(row);
+    });
+  }
+
+  function loadDevice(home, id, ch) {
+    var my = ++seq;
+    var q = "home=" + encodeURIComponent(home) + "&id=" + encodeURIComponent(id) + "&ch=" + ch +
+            "&from=" + encodeURIComponent($("from").value) + "&to=" + encodeURIComponent($("to").value);
+    $("dv-csv").href = "/api/device.csv?" + q;
+    $("dv-pdf").href = "/api/device.pdf?" + q;
+    $("dv-ev-csv").href = "/api/device-events.csv?" + q;
+    getJSON("/api/device?" + q)
+      .then(function (d) { if (my === seq) { showError(""); renderDevice(d); } })
+      .catch(function (err) { if (my === seq) showError("Errore nel caricamento del dispositivo: " + err.message); });
+    getJSON("/api/device/events?" + q)
+      .then(function (d) { if (my === seq) renderEvents(d); })
+      .catch(function () { if (my === seq) renderEvents({ events: [], total: 0 }); });
+  }
+
+  // ---- custom groups ----------------------------------------------------------------
+  var grp = { list: [], cloud: [], config: { readonly: true }, editing: null, members: {}, channels: [] };
+  var API_HEADERS = { "Content-Type": "application/json", "X-Requested-With": "shelly-monitor" };
+
+  function send(method, path, body) {
+    return fetch(path, { method: method, headers: API_HEADERS, body: body == null ? undefined : JSON.stringify(body) })
+      .then(function (r) {
+        return r.json().catch(function () { return {}; }).then(function (b) {
+          if (!r.ok) throw new Error(b.error || ("HTTP " + r.status));
+          return b;
+        });
+      });
+  }
+
+  function refreshGroups() {
+    var dates = "from=" + encodeURIComponent($("from").value) + "&to=" + encodeURIComponent($("to").value);
+    return Promise.all([getJSON("/api/custom-groups?" + dates), getJSON("/api/groups")])
+      .then(function (res) { grp.list = res[0]; grp.cloud = res[1]; renderGroupFilter(); });
+  }
+
+  function renderGroupFilter() {
+    var sel = $("grp"), keep = sel.value;
+    while (sel.options.length > 1) sel.remove(1);
+    sel.textContent = ""; sel.appendChild(new Option("Tutti", ""));
+    function add(label, items) {
+      if (!items.length) return;
+      var og = document.createElement("optgroup"); og.label = label;
+      items.forEach(function (it) { og.appendChild(new Option(it[1], it[0])); });
+      sel.appendChild(og);
+    }
+    add("Personalizzati", grp.list.map(function (g) { return ["c:" + g.id, g.name]; }));
+    var multi = state.homes.length > 1;
+    add("Dal cloud", grp.cloud.map(function (g) {
+      return ["d:" + g.home + "/" + g.group_id, g.name + (multi ? " · " + g.home : "")];
+    }));
+    var values = Array.prototype.map.call(sel.options, function (o) { return o.value; });
+    sel.value = values.indexOf(keep) >= 0 ? keep : "";
+    $("grp-f").hidden = sel.options.length <= 1;
+  }
+
+  function renderGroupBars(groups) {
+    var show = groups.length > 0;
+    $("groups-panel").hidden = !show;
+    if (!show) return;
+    renderBars($("groupbars"), groups.map(function (g) {
+      return { name: g.name, on_h: g.on_h || 0, onclick: function () { $("grp").value = "c:" + g.id; load(); } };
+    }).sort(function (a, b) { return b.on_h - a.on_h; }), groups.length);
+  }
+
+  function loadGroups() {
+    var my = ++seq;
+    Promise.all([refreshGroups(), getJSON("/api/devices")]).then(function (res) {
+      if (my !== seq) return;
+      showError("");
+      grp.channels = res[1];
+      renderGroups();
+      if (grp.editing != null) openEditor(grp.editing);
+    }).catch(function (err) { if (my === seq) showError("Errore nel caricamento dei gruppi: " + err.message); });
+  }
+
+  function renderGroups() {
+    var ro = grp.config.readonly;
+    $("g-new").hidden = ro;
+    $("g-ro").textContent = ro ? "Dashboard in sola lettura (SHELLY_WEB_READONLY=1): i gruppi si gestiscono da CLI." : "";
+    var box = $("g-list"); box.textContent = "";
+    if (!grp.list.length) {
+      var e = el("div", "panel empty", "Nessun gruppo personalizzato. Creane uno per sommare canali, anche di case diverse.");
+      e.style.padding = "18px"; box.appendChild(e); return;
+    }
+    var max = grp.list.reduce(function (a, g) { return Math.max(a, g.on_h || 0); }, 0) || 1;
+    var sec = el("section", "panel dev-group");
+    grp.list.forEach(function (g) {
+      var row = el("div", "g-row");
+      var nm = el("div", "nm");
+      var title = el("b", null, g.name); nm.appendChild(title);
+      var homes = {}; g.members.forEach(function (m) { if (m.home) homes[m.home] = 1; });
+      nm.appendChild(el("span", null, NF0.format(g.members.length) + " canali" + (Object.keys(homes).length ? " · " + Object.keys(homes).join(", ") : "")));
+      row.appendChild(nm);
+      var bar = el("div", "ibar"), fill = el("span", "ibar-fill"); fill.style.width = ((g.on_h || 0) / max * 100).toFixed(1) + "%";
+      bar.appendChild(fill); bar.appendChild(el("span", "num", NF1.format(g.on_h || 0) + " h")); row.appendChild(bar);
+      row.appendChild(el("span", "num", fmtWh(g.wh)));
+      var acts = el("div", "g-acts");
+      var show = el("a", "btn-link", "Panoramica"); show.href = "#/"; show.addEventListener("click", function () { $("grp").value = "c:" + g.id; });
+      acts.appendChild(show);
+      if (!ro) {
+        acts.appendChild(button("Membri", function () { openEditor(g.id); }));
+        acts.appendChild(button("Rinomina", function () { renameInline(row, title, g); }));
+        acts.appendChild(button("Elimina", function () {
+          if (!window.confirm("Eliminare il gruppo “" + g.name + "”? I dati dei canali non vengono toccati.")) return;
+          send("DELETE", "/api/custom-groups/" + g.id).then(function () { if (grp.editing === g.id) closeEditor(); loadGroups(); })
+            .catch(function (err) { showError(err.message); });
+        }, "danger"));
+      }
+      row.appendChild(acts);
+      sec.appendChild(row);
+    });
+    box.appendChild(sec);
+  }
+
+  function button(text, onclick, cls) {
+    var b = el("button", "btn" + (cls ? " " + cls : ""), text); b.type = "button"; b.addEventListener("click", onclick);
+    return b;
+  }
+
+  function renameInline(row, title, g) {
+    var form = el("form", "g-rename"), input = el("input");
+    input.type = "text"; input.value = g.name; input.maxLength = 60; input.required = true;
+    input.setAttribute("aria-label", "Nuovo nome del gruppo");
+    form.appendChild(input); form.appendChild(button("Salva", function () { form.requestSubmit(); }));
+    form.appendChild(button("Annulla", function () { renderGroups(); }));
+    form.addEventListener("submit", function (e) {
+      e.preventDefault();
+      send("POST", "/api/custom-groups", { id: g.id, name: input.value }).then(loadGroups).catch(function (err) { showError(err.message); });
+    });
+    title.replaceWith(form); input.focus(); input.select();
+  }
+
+  function memberKey(home, id, ch) { return home + "\u0000" + id + "\u0000" + ch; }
+
+  function openEditor(id) {
+    var g = grp.list.filter(function (x) { return x.id === id; })[0];
+    if (!g) { closeEditor(); return; }
+    grp.editing = id; grp.members = {};
+    g.members.forEach(function (m) { if (m.home) grp.members[memberKey(m.home, m.device_id, m.channel)] = 1; });
+    $("g-editor").hidden = false;
+    $("g-e-title").textContent = "Membri di “" + g.name + "”";
+    var homes = {}, rooms = {};
+    grp.channels.forEach(function (d) { homes[d.home] = 1; if (d.room) rooms[d.room] = 1; });
+    fillSelect($("g-e-home"), Object.keys(homes).sort());
+    fillSelect($("g-e-room"), Object.keys(rooms).sort(function (a, b) { return a.localeCompare(b, "it"); }));
+    renderEditor();
+    $("g-editor").scrollIntoView({ block: "start" });
+  }
+  function closeEditor() { grp.editing = null; $("g-editor").hidden = true; }
+
+  function renderEditor() {
+    var list = $("g-e-list"); list.textContent = "";
+    var h = $("g-e-home").value, r = $("g-e-room").value, q = $("g-e-q").value.trim().toLowerCase(), onlySel = $("g-e-sel").checked;
+    var shown = 0, multi = state.homes.length > 1;
+    grp.channels.filter(function (d) { return ON_KINDS[d.kind] || d.kind === "cover" || d.kind === "unknown"; })
+      .filter(function (d) {
+        var k = memberKey(d.home, d.device_id, d.channel);
+        return (!h || d.home === h) && (!r || d.room === r) && (!onlySel || grp.members[k]) &&
+          (!q || [devLabel(d), d.room, d.home, d.device_id, d.type].some(function (v) { return v && String(v).toLowerCase().indexOf(q) >= 0; }));
+      })
+      .sort(function (a, b) { return (a.home + (a.room || "~") + devLabel(a)).localeCompare(b.home + (b.room || "~") + devLabel(b), "it"); })
+      .forEach(function (d) {
+        var k = memberKey(d.home, d.device_id, d.channel);
+        var lab = el("label", "g-ch"), cb = el("input");
+        cb.type = "checkbox"; cb.checked = !!grp.members[k];
+        cb.addEventListener("change", function () { if (cb.checked) grp.members[k] = 1; else delete grp.members[k]; updateCount(); });
+        lab.appendChild(cb); lab.appendChild(icon(d.kind));
+        var txt = el("span", "nm"); txt.appendChild(el("b", null, devLabel(d)));
+        txt.appendChild(el("span", null, [multi ? d.home : null, d.room || "senza stanza", d.type || d.model, "ch " + d.channel].filter(Boolean).join(" · ")));
+        lab.appendChild(txt); list.appendChild(lab); shown++;
+      });
+    if (!shown) list.appendChild(el("div", "empty", "(nessun canale)"));
+    updateCount();
+  }
+  function updateCount() { $("g-e-count").textContent = NF0.format(Object.keys(grp.members).length) + " selezionati"; }
+
+  function saveMembers() {
+    var members = Object.keys(grp.members).map(function (k) {
+      var p = k.split("\u0000"); return { home: p[0], device_id: p[1], channel: parseInt(p[2], 10) };
+    });
+    send("PUT", "/api/custom-groups/" + grp.editing + "/members", { members: members })
+      .then(function () { closeEditor(); loadGroups(); })
+      .catch(function (err) { showError("Salvataggio non riuscito: " + err.message); });
+  }
+
+  // ---- routing -------------------------------------------------------------------------
+  function currentRoute() {
+    var h = location.hash.replace(/^#\/?/, ""), parts = h.split("/");
+    if (parts[0] === "devices") return { name: "devices" };
+    if (parts[0] === "groups") return { name: "groups" };
+    if (parts[0] === "device" && parts.length >= 4)
+      return { name: "device", home: decodeURIComponent(parts[1]), id: decodeURIComponent(parts[2]), ch: parseInt(parts[3], 10) || 0 };
+    return { name: "overview" };
+  }
+  function load() {
+    var r = currentRoute();
+    ["overview", "devices", "device", "groups"].forEach(function (v) { $("view-" + v).hidden = v !== r.name; });
+    ["nav-overview", "nav-devices", "nav-groups"].forEach(function (n) { $(n).removeAttribute("aria-current"); });
+    $(r.name === "overview" ? "nav-overview" : r.name === "groups" ? "nav-groups" : "nav-devices").setAttribute("aria-current", "page");
+    $("export").hidden = r.name === "device" || r.name === "groups";
+    $("grp-f").hidden = $("grp").options.length <= 1 || r.name !== "overview" && r.name !== "devices";
+    $("export").open = false;
+    updateExportLinks();
+    $("home-f").hidden = state.homes.length <= 1 || r.name === "device";
+    $("room-f").hidden = !$("room").options.length || $("room").options.length <= 1 || r.name === "device";
+    document.title = { overview: "shelly-monitor", devices: "Dispositivi · shelly-monitor", groups: "Gruppi · shelly-monitor" }[r.name] ||
+      "Dispositivo · shelly-monitor";
+    if (r.name === "devices") loadDevices();
+    else if (r.name === "groups") loadGroups();
+    else if (r.name === "device") loadDevice(r.home, r.id, r.ch);
+    else loadOverview();
+  }
+  window.addEventListener("hashchange", function () { window.scrollTo(0, 0); load(); });
+  document.addEventListener("click", function (e) {
+    if (!$("export").contains(e.target)) $("export").open = false;
+  });
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape" && $("export").open) { $("export").open = false; $("export").querySelector("summary").focus(); }
+  });
+  $("dq").addEventListener("input", function (e) { dev.query = e.target.value; renderDevices(); });
+  document.querySelectorAll("#devgroup-seg button").forEach(function (b) {
+    b.addEventListener("click", function () {
+      dev.by = b.dataset.by;
+      document.querySelectorAll("#devgroup-seg button").forEach(function (x) { x.setAttribute("aria-pressed", String(x === b)); });
+      renderDevices();
+    });
+  });
+
+  var today = new Date();
+  $("from").value = iso(new Date(today.getFullYear(), today.getMonth(), 1));
+  $("to").value = iso(today);
+  $("from").addEventListener("change", load);
+  $("to").addEventListener("change", load);
+  $("q").addEventListener("input", function (e) { state.query = e.target.value; renderTable(); });
+  $("home").addEventListener("change", function () { renderFilters(); load(); });
+  $("room").addEventListener("change", load);
+  $("grp").addEventListener("change", load);
+  $("g-new").addEventListener("submit", function (e) {
+    e.preventDefault();
+    send("POST", "/api/custom-groups", { name: $("g-new-name").value })
+      .then(function (g) { $("g-new-name").value = ""; grp.editing = g.id; loadGroups(); })
+      .catch(function (err) { showError(err.message); });
+  });
+  ["g-e-home", "g-e-room", "g-e-sel"].forEach(function (id) { $(id).addEventListener("change", renderEditor); });
+  $("g-e-q").addEventListener("input", renderEditor);
+  $("g-e-save").addEventListener("click", saveMembers);
+  $("g-e-cancel").addEventListener("click", closeEditor);
+  renderHead();
+  Promise.all([
+    getJSON("/api/homes").then(function (homes) { state.homes = homes; renderFilters(); }),
+    getJSON("/api/config").then(function (c) { grp.config = c; }),
+    refreshGroups()
+  ]).catch(function () { /* filters stay hidden */ }).then(load);
+})();
+</script>
+</body>
+</html>

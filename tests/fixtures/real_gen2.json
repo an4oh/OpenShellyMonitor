@@ -1,0 +1,374 @@
+{
+  "isok": true,
+  "data": {
+    "devices_status": {
+      "aabbcc000001": {
+        "v_eve:0": {
+          "ev": "",
+          "ttl": -1,
+          "id": 0,
+          "last_ev": "",
+          "last_ev_ts": -1
+        },
+        "input:0": {
+          "id": 0,
+          "state": null
+        },
+        "sys": {
+          "restart_required": false,
+          "time": "06:04",
+          "unixtime": 1793077458,
+          "uptime": 162148,
+          "ram_size": 261036,
+          "ram_free": 153056,
+          "fs_size": 1048576,
+          "fs_free": 708608,
+          "cfg_rev": 12,
+          "kvs_rev": 0,
+          "schedule_rev": 0,
+          "webhook_rev": 0,
+          "available_updates": {
+            "stable": {
+              "version": "1.3.3"
+            }
+          },
+          "reset_reason": 1
+        },
+        "cloud": {
+          "connected": true
+        },
+        "code": "S3SW-001X8EU",
+        "_updated": "2026-10-27 05:04:18",
+        "switch:0": {
+          "id": 0,
+          "source": "SHC",
+          "output": false,
+          "temperature": {
+            "tC": 49,
+            "tF": 120.2
+          }
+        },
+        "id": "aabbcc000001"
+      },
+      "aabbcc000002": {
+        "input:0": {
+          "id": 0,
+          "state": null
+        },
+        "light:3": {
+          "id": 3,
+          "source": "SHC",
+          "output": false,
+          "brightness": 100,
+          "temperature": {
+            "tC": 48,
+            "tF": 118.4
+          },
+          "voltage": 25,
+          "flags": [
+            "uncalibrated"
+          ]
+        },
+        "v_eve:2": {
+          "ev": "",
+          "ttl": -1,
+          "last_ev": "S",
+          "last_ev_ts": 1793097820619,
+          "id": 2
+        },
+        "light:2": {
+          "id": 2,
+          "brightness": 11,
+          "output": false,
+          "source": "dim",
+          "temperature": {
+            "tC": 48,
+            "tF": 118.4
+          },
+          "voltage": 25,
+          "flags": [
+            "uncalibrated"
+          ]
+        },
+        "code": "SNDC-0D4P10WW",
+        "input:3": {
+          "id": 3,
+          "state": null
+        },
+        "v_eve:3": {
+          "ev": "",
+          "ttl": -1,
+          "id": 3,
+          "last_ev": "",
+          "last_ev_ts": -1
+        },
+        "input:1": {
+          "id": 1,
+          "state": null
+        },
+        "ts": 1793097819.77,
+        "_updated": "2026-10-27 10:43:40",
+        "light:1": {
+          "id": 1,
+          "brightness": 29,
+          "output": false,
+          "source": "dim",
+          "temperature": {
+            "tC": 48,
+            "tF": 118.4
+          },
+          "voltage": 25,
+          "flags": [
+            "uncalibrated"
+          ]
+        },
+        "input:2": {
+          "id": 2,
+          "state": null
+        },
+        "id": "aabbcc000002",
+        "v_eve:0": {
+          "ev": "",
+          "ttl": -1,
+          "id": 0,
+          "last_ev": "",
+          "last_ev_ts": -1
+        },
+        "sys": {
+          "restart_required": false,
+          "time": "10:23",
+          "unixtime": 1793092993,
+          "uptime": 177675,
+          "ram_size": 252100,
+          "ram_free": 121980,
+          "fs_size": 393216,
+          "fs_free": 94208,
+          "cfg_rev": 19,
+          "kvs_rev": 0,
+          "schedule_rev": 1,
+          "webhook_rev": 1,
+          "available_updates": {
+            "stable": {
+              "version": "2.0.3"
+            }
+          },
+          "reset_reason": 1
+        },
+        "cloud": {
+          "connected": true
+        },
+        "v_eve:1": {
+          "ev": "",
+          "ttl": -1,
+          "last_ev": "S",
+          "last_ev_ts": 1793097818803,
+          "id": 1
+        },
+        "light:0": {
+          "id": 0,
+          "source": "SHC",
+          "output": false,
+          "brightness": 100,
+          "temperature": {
+            "tC": 48,
+            "tF": 118.4
+          },
+          "voltage": 25,
+          "flags": [
+            "uncalibrated"
+          ]
+        },
+        "plusrgbwpm": {}
+      },
+      "aabbcc000003": {
+        "input:0": {
+          "id": 0,
+          "state": null
+        },
+        "v_eve:2": {
+          "ev": "",
+          "ttl": -1,
+          "last_ev": "S",
+          "last_ev_ts": 1793098145941,
+          "id": 2
+        },
+        "code": "SNDC-0D4P10WW",
+        "input:3": {
+          "id": 3,
+          "state": null
+        },
+        "v_eve:3": {
+          "ev": "",
+          "ttl": -1,
+          "id": 3,
+          "last_ev": "",
+          "last_ev_ts": -1
+        },
+        "input:1": {
+          "id": 1,
+          "state": null
+        },
+        "ts": 1793102280.02,
+        "_updated": "2026-10-27 11:58:10",
+        "input:2": {
+          "id": 2,
+          "state": null
+        },
+        "id": "aabbcc000003",
+        "v_eve:0": {
+          "ev": "",
+          "ttl": -1,
+          "id": 0,
+          "last_ev": "",
+          "last_ev_ts": -1
+        },
+        "sys": {
+          "available_updates": {
+            "stable": {
+              "version": "2.0.3"
+            }
+          },
+          "restart_required": false,
+          "time": "05:56",
+          "unixtime": 1793077013,
+          "uptime": 161695,
+          "ram_size": 252344,
+          "ram_free": 126984,
+          "fs_size": 393216,
+          "fs_free": 94208,
+          "cfg_rev": 19,
+          "kvs_rev": 0,
+          "schedule_rev": 0,
+          "webhook_rev": 0,
+          "reset_reason": 1
+        },
+        "cloud": {
+          "connected": true
+        },
+        "v_eve:1": {
+          "ev": "",
+          "ttl": -1,
+          "id": 1,
+          "last_ev": "",
+          "last_ev_ts": -1
+        },
+        "plusrgbwpm": {},
+        "rgbw:0": {
+          "id": 0,
+          "aenergy": {
+            "by_minute": [
+              0,
+              0,
+              0
+            ],
+            "minute_ts": 1793102280,
+            "total": 6319.839
+          },
+          "source": "dim",
+          "output": false,
+          "rgb": [
+            56,
+            54,
+            254
+          ],
+          "brightness": 64,
+          "white": 152,
+          "temperature": {
+            "tC": 47.5,
+            "tF": 117.6
+          },
+          "apower": 0,
+          "current": 0,
+          "voltage": 24.7
+        }
+      },
+      "aabbcc000004": {
+        "input:0": {
+          "id": 0,
+          "state": null
+        },
+        "v_eve:2": {
+          "ev": "",
+          "ttl": -1,
+          "id": 2,
+          "last_ev": "",
+          "last_ev_ts": -1
+        },
+        "code": "SNSN-0D24X",
+        "input:3": {
+          "id": 3,
+          "state": null
+        },
+        "v_eve:3": {
+          "ev": "",
+          "ttl": -1,
+          "id": 3,
+          "last_ev": "",
+          "last_ev_ts": -1
+        },
+        "input:1": {
+          "id": 1,
+          "state": null
+        },
+        "_updated": "2026-10-27 10:17:04",
+        "input:2": {
+          "id": 2,
+          "state": null
+        },
+        "id": "aabbcc000004",
+        "v_eve:0": {
+          "ev": "",
+          "ttl": -1,
+          "id": 0,
+          "last_ev": "",
+          "last_ev_ts": -1
+        },
+        "sys": {
+          "restart_required": false,
+          "time": "11:17",
+          "unixtime": 1793096221,
+          "uptime": 180909,
+          "ram_size": 246828,
+          "ram_free": 143104,
+          "fs_size": 458752,
+          "fs_free": 151552,
+          "cfg_rev": 16,
+          "kvs_rev": 0,
+          "schedule_rev": 0,
+          "webhook_rev": 0,
+          "available_updates": {
+            "stable": {
+              "version": "1.3.3"
+            }
+          }
+        },
+        "cloud": {
+          "connected": true
+        },
+        "v_eve:1": {
+          "ev": "",
+          "ttl": -1,
+          "id": 1,
+          "last_ev": "",
+          "last_ev_ts": -1
+        }
+      },
+      "1700000000005": {
+        "id": "1700000000005",
+        "mode": "heat",
+        "type": "THERMOSTAT",
+        "family": "thermostat",
+        "thermostat": [
+          {
+            "_enabled": true,
+            "threshold": 0.5,
+            "tempval": 17.5,
+            "temp_fix": 0,
+            "int_temp": 20,
+            "isinfh": false
+          }
+        ]
+      }
+    }
+  }
+}

@@ -1,0 +1,37 @@
+services:
+  shelly-monitor:
+    build: .
+    image: shelly-monitor:latest
+    restart: unless-stopped
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      SHELLY_DB: /data/shelly-monitor.db
+      TZ: Europe/Rome  # reports group by day/month in this timezone
+    volumes:
+      - shelly-data:/data
+      # Bind mount instead of the named volume (see README):
+      # - ./data:/data
+
+  # Read-only web dashboard. No authentication: the port is published on
+  # localhost only; put a reverse proxy with auth in front to expose it.
+  web:
+    image: shelly-monitor:latest
+    restart: unless-stopped
+    depends_on:
+      - shelly-monitor
+    command: serve --host 0.0.0.0
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      SHELLY_DB: /data/shelly-monitor.db
+      TZ: Europe/Rome
+    ports:
+      - "127.0.0.1:8787:8787"
+    volumes:
+      - shelly-data:/data
+
+volumes:
+  shelly-data:

@@ -1,0 +1,18 @@
+# User-level web dashboard; see shelly-monitor.service in this folder for installation.
+# Listens on 127.0.0.1:8787 unless SHELLY_HTTP_HOST / SHELLY_HTTP_PORT are set in the env file.
+[Unit]
+Description=Shelly Monitor web dashboard (user)
+After=network.target shelly-monitor.service
+
+[Service]
+Type=simple
+StateDirectory=shelly-monitor
+EnvironmentFile=%h/.config/shelly-monitor/env
+Environment=SHELLY_DB=%S/shelly-monitor/shelly-monitor.db
+WorkingDirectory=%S/shelly-monitor
+ExecStart=%h/.local/bin/shelly-monitor serve
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=default.target

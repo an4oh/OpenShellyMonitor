@@ -1,0 +1,30 @@
+# Login sidecar for the public dashboard (systemd user unit). Install:
+#   cp deploy/public/shelly-monitor-auth.service ~/.config/systemd/user/
+#   systemctl --user daemon-reload && systemctl --user enable --now shelly-monitor-auth
+# Adjust ExecStart if the repository lives elsewhere. Secrets: ~/.config/shelly-monitor/auth.env
+# (set-password.py), read-only thanks to ProtectHome=read-only.
+[Unit]
+Description=Shelly Monitor dashboard login (127.0.0.1:18097)
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 %h/shelly-monitor/deploy/public/auth_server.py
+Restart=on-failure
+RestartSec=3
+Environment=SHELLY_AUTH_PORT=18097
+Environment=PYTHONDONTWRITEBYTECODE=1
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=read-only
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_INET AF_UNIX
+RestrictNamespaces=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallFilter=@system-service
+
+[Install]
+WantedBy=default.target

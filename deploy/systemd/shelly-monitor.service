@@ -1,0 +1,29 @@
+# Long-running poller. Install (system-wide example; user-level units are in user/,
+# the web dashboard is shelly-monitor-web.service):
+#   sudo useradd --system --home /var/lib/shelly-monitor shelly-monitor
+#   sudo pipx install --global git+https://github.com/an4oh/OpenShellyMonitor.git   (or: pip install . into a venv)
+#   sudo install -m 600 -o shelly-monitor .env /etc/shelly-monitor.env
+#   sudo cp deploy/systemd/shelly-monitor.service /etc/systemd/system/
+#   sudo systemctl daemon-reload && sudo systemctl enable --now shelly-monitor
+[Unit]
+Description=Shelly Cloud relay state logger
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=shelly-monitor
+StateDirectory=shelly-monitor
+WorkingDirectory=/var/lib/shelly-monitor
+EnvironmentFile=/etc/shelly-monitor.env
+Environment=SHELLY_DB=/var/lib/shelly-monitor/shelly-monitor.db
+ExecStart=/usr/local/bin/shelly-monitor run
+Restart=on-failure
+RestartSec=30
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

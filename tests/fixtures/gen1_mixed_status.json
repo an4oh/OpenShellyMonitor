@@ -1,0 +1,71 @@
+{
+  "isok": true,
+  "data": {
+    "devices_status": {
+      "a1a1a1000001": {
+        "_updated": "2026-10-27 13:13:03", "cloud": {"enabled": true, "connected": true}, "mac": "A1A1A1000001",
+        "wifi_sta": {"connected": true, "rssi": -61},
+        "lights": [{"ison": true, "source": "cloud", "mode": "white", "brightness": 18, "transition": 0}],
+        "meters": [{"power": 42.5, "overpower": 0, "is_valid": true, "timestamp": 1793110381, "counters": [0, 0, 0], "total": 6652}],
+        "tmp": {"tC": 42.21, "tF": 107.98, "is_valid": true}, "inputs": [{"input": 0, "event": "", "event_cnt": 133}]
+      },
+      "a1a1a1000002": {
+        "_updated": "2026-10-27 13:12:41", "cloud": {"enabled": true, "connected": true}, "mode": "white",
+        "wifi_sta": {"connected": true, "rssi": -55},
+        "lights": [{"ison": false, "mode": "white", "brightness": 40}, {"ison": true, "mode": "white", "brightness": 100},
+                   {"ison": false, "mode": "white", "brightness": 0}, {"ison": false, "mode": "white", "brightness": 5}],
+        "meters": [{"power": 0, "total": 120}, {"power": 7.2, "total": 7290}, {"power": 0, "total": 0}, {"power": 0, "total": 60}]
+      },
+      "a1a1a1000003": {
+        "_updated": "2026-10-27 13:12:41", "cloud": {"enabled": true, "connected": true}, "mode": "color",
+        "wifi_sta": {"connected": true, "rssi": -70},
+        "lights": [{"ison": true, "mode": "color", "red": 56, "green": 54, "blue": 254, "white": 3, "gain": 11}],
+        "meters": [{"power": 3.0, "total": 600}]
+      },
+      "a1a1a1000004": {
+        "_updated": "2026-10-27 10:12:32", "cloud": {"enabled": true, "connected": true},
+        "wifi_sta": {"connected": true, "rssi": -60},
+        "relays": [{"ison": true, "has_timer": false, "source": "input"}],
+        "meters": [{"power": 1830.5, "is_valid": true}],
+        "ext_temperature": {"0": {"hC": 21.5, "tC": 21.5, "tF": 70.7}}, "ext_humidity": {"0": {"hum": 55.0}},
+        "inputs": [{"input": 0, "event": "", "event_cnt": 0}]
+      },
+      "a1a1a1000005": {
+        "_updated": "2026-10-26 22:29:41", "cloud": {"enabled": true, "connected": false},
+        "wifi_sta": {"connected": true, "rssi": -80},
+        "inputs": [{"input": 0, "event": "", "event_cnt": 27, "last_sequence": "S"}, {"input": 0}, {"input": 0}]
+      },
+      "a1a1a1000006": {
+        "_updated": "2026-10-27 02:00:02", "cloud": {"enabled": true, "connected": true},
+        "wifi_sta": {"connected": true, "rssi": -50},
+        "lights": [{"ison": false, "mode": "white", "red": 255, "green": 38, "blue": 54, "white": 0, "gain": 70, "temp": 3000, "brightness": 64}],
+        "meters": [{"power": 0, "total": 0}]
+      },
+      "a1a1a1000007": {
+        "_updated": "2026-10-27 13:10:00", "cloud": {"enabled": true, "connected": true}, "mode": "roller",
+        "wifi_sta": {"connected": true, "rssi": -58},
+        "relays": [{"ison": false}, {"ison": false}],
+        "rollers": [{"state": "close", "power": 120.0, "current_pos": 35, "last_direction": "close"}],
+        "meters": [{"power": 120.0}, {"power": 0}]
+      },
+      "b2b2b2000001": {
+        "_updated": "2026-10-27 13:12:52", "cloud": {"connected": true}, "code": "SNSW-102P16EU", "id": "b2b2b2000001",
+        "input:0": {"id": 0, "state": false}, "input:1": {"id": 1, "state": false},
+        "cover:0": {"id": 0, "aenergy": {"total": 463.154}, "source": "limit_switch", "state": "opening", "apower": 85,
+                    "current_pos": 40, "pos_control": true, "last_direction": "open"}
+      },
+      "b2b2b2000002": {
+        "_updated": "2026-10-27 06:43:42", "_sleeping": true, "cloud": {"connected": true}, "code": "S4SN-0071A", "id": "b2b2b2000002",
+        "devicepower:0": {"id": 0, "battery": {"V": 5.74, "percent": 86}},
+        "flood:0": {"id": 0, "alarm": true, "mute": false}
+      },
+      "b2b2b2000003": {
+        "_updated": "2026-10-27 13:06:55", "cloud": {"connected": true}, "code": "S3SW-001X16EU", "id": "b2b2b2000003",
+        "switch:0": {"id": 0, "output": true, "source": "SHC", "temperature": {"tC": 54.7, "tF": 130.4}},
+        "temperature:100": {"id": 100, "tC": 17.75, "tF": 63.95}, "humidity:100": {"id": 100, "rh": 48.2}
+      },
+      "1700000000009": {"family": "thermostat", "id": "1700000000009", "mode": "heat", "type": "THERMOSTAT",
+                        "thermostat": [{"_enabled": true, "tempval": 17.1}]}
+    }
+  }
+}

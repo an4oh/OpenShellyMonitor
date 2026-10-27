@@ -1,0 +1,12 @@
+{
+  "isok": true,
+  "data": {
+    "own_units": [
+      {"unit_id": 100001, "name": "user@example.com", "avatar": "color-green", "subs": 0, "position": 0},
+      {"unit_id": 100002, "name": "Casa Lago", "avatar": {"image": "./images/home_def/app_bg_03_thumb.png"}, "subs": 1, "position": 1},
+      {"unit_id": 100003, "name": "Casa Monte", "avatar": {"image": "./images/home_def/app_bg_05_thumb.png"}, "subs": 0, "position": 2},
+      {"unit_id": 100004, "name": "Rifugio", "avatar": {"image": "./images/home_def/app_bg_03_thumb.png"}, "subs": 0, "position": 3}
+    ],
+    "sub_units": []
+  }
+}

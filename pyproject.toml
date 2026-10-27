@@ -1,0 +1,48 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "shelly-monitor"
+dynamic = ["version"]
+description = "Poll Shelly Cloud every minute, log relay ON/OFF states and the cloud activity log to SQLite, report ON time per device and serve a read-only web dashboard."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "an4oh" }]
+keywords = ["shelly", "smart-home", "sqlite", "energy", "monitoring"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Topic :: Home Automation",
+]
+dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/an4oh/OpenShellyMonitor"
+Repository = "https://github.com/an4oh/OpenShellyMonitor"
+Issues = "https://github.com/an4oh/OpenShellyMonitor/issues"
+Changelog = "https://github.com/an4oh/OpenShellyMonitor/blob/main/CHANGELOG.md"
+
+[project.optional-dependencies]
+dev = ["pytest>=7"]
+
+[project.scripts]
+shelly-monitor = "shelly_monitor.cli:main"
+
+[tool.setuptools.dynamic]
+version = { attr = "shelly_monitor.__version__" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+
+[tool.setuptools.package-data]
+shelly_monitor = ["web/index.html"]

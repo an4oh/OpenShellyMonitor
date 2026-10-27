@@ -1,0 +1,169 @@
+{
+ "errors": [],
+ "result": {
+  "aabbccddee01": [
+   {
+    "tag": "aabbccddee01",
+    "t": 1793104441840,
+    "e": 1,
+    "p": "[\"aabbccddee01\",0,false]",
+    "rowid": 55
+   },
+   {
+    "tag": "aabbccddee01",
+    "t": 1793098802237,
+    "e": 1,
+    "p": "[\"aabbccddee01\",0,true]",
+    "rowid": 52
+   },
+   {
+    "tag": "aabbccddee01",
+    "t": 1793098425460,
+    "e": 1,
+    "p": "[\"aabbccddee01\",0,false]",
+    "rowid": 51
+   },
+   {
+    "tag": "aabbccddee01",
+    "t": 1793098423843,
+    "e": 1,
+    "p": "[\"aabbccddee01\",0,true]",
+    "rowid": 50
+   },
+   {
+    "tag": "aabbccddee01",
+    "t": 1793097638385,
+    "e": 1,
+    "p": "[\"aabbccddee01\",0,false]",
+    "rowid": 16
+   }
+  ],
+  "aabbccddee02": [
+   {
+    "tag": "aabbccddee02",
+    "t": 1793097660464,
+    "e": 1,
+    "p": "[\"aabbccddee02\",0,false]",
+    "rowid": 29
+   },
+   {
+    "tag": "aabbccddee02",
+    "t": 1793097657095,
+    "e": 8,
+    "p": "[\"aabbccddee02\",0,15]",
+    "rowid": 22
+   },
+   {
+    "tag": "aabbccddee02",
+    "t": 1793097656925,
+    "e": 1,
+    "p": "[\"aabbccddee02\",0,true]",
+    "rowid": 18
+   }
+  ],
+  "aabbccddee03_1": [
+   {
+    "tag": "aabbccddee03_1",
+    "t": 1793097818965,
+    "e": 1,
+    "p": "[\"aabbccddee03\",1,false]",
+    "rowid": 39
+   },
+   {
+    "tag": "aabbccddee03_1",
+    "t": 1793097818869,
+    "e": 13,
+    "p": "[\"aabbccddee03\",1,\"S\",\"v_eve\"]",
+    "rowid": 38
+   },
+   {
+    "tag": "aabbccddee03_1",
+    "t": 1793097813021,
+    "e": 1,
+    "p": "[\"aabbccddee03\",1,true]",
+    "rowid": 37
+   },
+   {
+    "tag": "aabbccddee03_1",
+    "t": 1793097812930,
+    "e": 13,
+    "p": "[\"aabbccddee03\",1,\"S\",\"v_eve\"]",
+    "rowid": 36
+   }
+  ],
+  "aabbccddee04": [
+   {
+    "t": 1793080822127,
+    "e": 5,
+    "p": "[\"aabbccddee04\",0,\"open\",100]",
+    "tag": "aabbccddee04",
+    "rowid": 286258
+   },
+   {
+    "t": 1793080807786,
+    "e": 5,
+    "p": "[\"aabbccddee04\",0,\"opening\",0]",
+    "tag": "aabbccddee04",
+    "rowid": 286257
+   },
+   {
+    "t": 1793048410629,
+    "e": 5,
+    "p": "[\"aabbccddee04\",0,\"closed\",0]",
+    "tag": "aabbccddee04",
+    "rowid": 286189
+   },
+   {
+    "t": 1793048400534,
+    "e": 5,
+    "p": "[\"aabbccddee04\",0,\"closing\",51]",
+    "tag": "aabbccddee04",
+    "rowid": 286187
+   },
+   {
+    "t": 1793041269425,
+    "e": 5,
+    "p": "[\"aabbccddee04\",0,\"stopped\",51]",
+    "tag": "aabbccddee04",
+    "rowid": 286147
+   }
+  ],
+  "aabbccddee05": [
+   {
+    "t": 1790255063560,
+    "e": 4,
+    "p": "[\"aabbccddee05\",\"status_update\",null,100,null]",
+    "tag": "aabbccddee05",
+    "rowid": 278025
+   },
+   {
+    "t": 1790212046987,
+    "e": 4,
+    "p": "[\"aabbccddee05\",\"status_update\",null,100,null]",
+    "tag": "aabbccddee05",
+    "rowid": 277980
+   },
+   {
+    "t": 1790169048239,
+    "e": 4,
+    "p": "[\"aabbccddee05\",\"status_update\",null,100,null]",
+    "tag": "aabbccddee05",
+    "rowid": 277772
+   },
+   {
+    "t": 1790126080648,
+    "e": 4,
+    "p": "[\"aabbccddee05\",\"status_update\",null,100,null]",
+    "tag": "aabbccddee05",
+    "rowid": 277624
+   },
+   {
+    "t": 1790083145177,
+    "e": 4,
+    "p": "[\"aabbccddee05\",\"status_update\",null,100,null]",
+    "tag": "aabbccddee05",
+    "rowid": 277578
+   }
+  ]
+ }
+}

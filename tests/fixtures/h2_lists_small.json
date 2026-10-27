@@ -1,0 +1,34 @@
+{
+  "isok": true,
+  "data": {
+    "devices": {
+      "a1a1a1000001": {"id": "a1a1a1000001", "type": "SHDM-2", "category": "light", "mode": "white", "gen": 1, "channel": 0, "channels_count": 1, "name": "Dimmer hall", "room_id": 1},
+      "a1a1a1000002": {"id": "a1a1a1000002", "type": "SHRGBW2", "category": "light", "mode": "white", "gen": 1, "channel": 0, "channels_count": 4, "name": "Strip 1", "room_id": 1},
+      "a1a1a1000002_1": {"id": "a1a1a1000002_1", "type": "SHRGBW2", "category": "light", "mode": "white", "gen": 1, "channel": 1, "channels_count": 4, "name": "Strip 2", "room_id": 1},
+      "a1a1a1000002_2": {"id": "a1a1a1000002_2", "type": "SHRGBW2", "category": "light", "mode": "white", "gen": 1, "channel": 2, "channels_count": 4, "name": "Strip 3", "room_id": 2},
+      "a1a1a1000002_3": {"id": "a1a1a1000002_3", "type": "SHRGBW2", "category": "light", "mode": "white", "gen": 1, "channel": 3, "channels_count": 4, "name": "Strip 4", "room_id": 2},
+      "a1a1a1000003": {"id": "a1a1a1000003", "type": "SHRGBW2", "category": "light", "mode": "color", "gen": 1, "channel": 0, "channels_count": 1, "name": "Colour strip", "room_id": 2},
+      "a1a1a1000004": {"id": "a1a1a1000004", "type": "SHSW-1", "category": "relay", "mode": "relay", "gen": 1, "channel": 0, "channels_count": 1, "name": "Boiler", "room_id": 3},
+      "a1a1a1000005": {"id": "a1a1a1000005", "type": "SHIX3-1", "category": "inputs_reader", "mode": "inputs_reader", "gen": 1, "channel": 0, "channels_count": 3, "name": "Buttons 1", "room_id": 1},
+      "a1a1a1000005_1": {"id": "a1a1a1000005_1", "type": "SHIX3-1", "category": "inputs_reader", "gen": 1, "channel": 1, "channels_count": 3, "name": "Buttons 2", "room_id": 1},
+      "a1a1a1000005_2": {"id": "a1a1a1000005_2", "type": "SHIX3-1", "category": "inputs_reader", "gen": 1, "channel": 2, "channels_count": 3, "name": "Buttons 3", "room_id": 1},
+      "a1a1a1000006": {"id": "a1a1a1000006", "type": "SHCB-1", "category": "light", "mode": "color", "gen": 1, "channel": 0, "channels_count": 1, "name": "Bulb", "room_id": -10},
+      "b2b2b2000001": {"id": "b2b2b2000001", "type": "SNSW-102P16EU", "category": "roller", "mode": "roller", "gen": 2, "channel": 0, "channels_count": 1, "name": "Blind", "room_id": 3},
+      "b2b2b2000002": {"id": "b2b2b2000002", "type": "S4SN-0071A", "category": "sensor", "mode": "sensor", "gen": 4, "channel": 0, "channels_count": 1, "name": "Flood", "room_id": 3},
+      "b2b2b2000003": {"id": "b2b2b2000003", "type": "S3SW-001X16EU", "category": "relay", "mode": "relay", "gen": 3, "channel": 0, "channels_count": 1, "name": "Pump", "room_id": 3},
+      "c3c3c3000001": {"id": "c3c3c3000001", "type": "SHDM-2", "category": "light", "mode": "white", "gen": 1, "channel": 0, "channels_count": 1, "name": "Offline dimmer", "room_id": -20}
+    },
+    "rooms": {
+      "1": {"id": 1, "name": "Hall", "position": 1},
+      "2": {"id": 2, "name": "Kitchen", "position": 2},
+      "3": {"id": 3, "name": "Garage", "position": 3}
+    },
+    "groups": {
+      "7": {"id": 7, "name": "All strips", "type": "light", "room_id": 1, "position": 1,
+            "devices": ["a1a1a1000002", "a1a1a1000002_1", "a1a1a1000002_2", "a1a1a1000002_3"]},
+      "11": {"id": 11, "name": "Garage", "type": "roller", "room_id": 3, "position": 2,
+             "devices": ["b2b2b2000001", "d4d4d4000001"]}
+    },
+    "dashboards": {}
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "isok": true,
+  "data": {
+    "devices_status": {
+      "dc4f2276846a": {
+        "_dev_info": {"id": "dc4f2276846a", "gen": "G1", "code": "SHSW-25", "online": true},
+        "relays": [{"ison": true, "has_timer": false}, {"ison": false, "has_timer": false}],
+        "meters": [{"power": 1830.5, "is_valid": true}, {"power": 0, "is_valid": true}]
+      },
+      "a1b2c3d4e5f6": {
+        "_dev_info": {"id": "a1b2c3d4e5f6", "gen": "G1", "code": "SHSW-1", "online": false},
+        "relays": [{"ison": false}]
+      }
+    }
+  }
+}

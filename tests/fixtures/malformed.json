@@ -1,0 +1,13 @@
+{
+  "isok": true,
+  "data": {
+    "devices_status": {
+      "bad1": "not an object",
+      "bad2": {"_dev_info": {"id": "bad2", "gen": "G1", "online": true}, "relays": "nope"},
+      "bad3": {"_dev_info": {"id": "bad3", "gen": "G1", "online": true}, "relays": [{"ison": "yes"}]},
+      "bad4": {"_dev_info": {"id": "bad4", "gen": "G2", "online": true}, "switch:0": {"output": null}},
+      "bad5": {"_dev_info": null, "switch:0": ["x"]},
+      "good": {"_dev_info": {"id": "good", "gen": "G2", "online": true}, "switch:0": {"output": true, "apower": "n/a"}}
+    }
+  }
+}

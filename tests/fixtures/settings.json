@@ -1,0 +1,10 @@
+{
+  "isok": true,
+  "data": {
+    "settings": {
+      "avatar": {"image": "./images/home_def/app_bg_05_thumb.png"},
+      "acc_avatar": "color-green",
+      "timezone": "Europe/Rome"
+    }
+  }
+}

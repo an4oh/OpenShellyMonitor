@@ -1,0 +1,23 @@
+# User-level poller (no root needed). Install:
+#   pipx install git+https://github.com/an4oh/OpenShellyMonitor.git   (or from a clone: pipx install .)
+#   mkdir -p ~/.config/shelly-monitor && cp .env ~/.config/shelly-monitor/env && chmod 600 ~/.config/shelly-monitor/env
+#   cp deploy/systemd/user/*.service ~/.config/systemd/user/
+#   systemctl --user daemon-reload && systemctl --user enable --now shelly-monitor shelly-monitor-web
+#   loginctl enable-linger "$USER"     # keep running after logout
+[Unit]
+Description=Shelly Cloud relay state logger (user)
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+StateDirectory=shelly-monitor
+EnvironmentFile=%h/.config/shelly-monitor/env
+Environment=SHELLY_DB=%S/shelly-monitor/shelly-monitor.db
+WorkingDirectory=%S/shelly-monitor
+ExecStart=%h/.local/bin/shelly-monitor run
+Restart=on-failure
+RestartSec=30
+
+[Install]
+WantedBy=default.target

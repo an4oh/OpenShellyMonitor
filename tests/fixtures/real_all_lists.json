@@ -1,0 +1,27 @@
+{
+  "isok": true,
+  "data": {
+    "devices": {
+      "aabbcc000001": {"id": "aabbcc000001", "type": "S3SW-001X8EU", "category": "relay", "gen": 3,
+                       "channels_count": 1, "channel": 0, "name": "Boiler", "room_id": 1, "position": 1},
+      "aabbcc000002": {"id": "aabbcc000002", "type": "SNDC-0D4P10WW", "category": "light", "gen": 2,
+                       "channels_count": 4, "channel": 0, "name": "Strip kitchen", "room_id": 1, "position": 2},
+      "aabbcc000002_1": {"id": "aabbcc000002_1", "type": "SNDC-0D4P10WW", "category": "light", "gen": 2,
+                         "channels_count": 4, "channel": 1, "name": "Strip hall", "room_id": 2, "position": 3},
+      "aabbcc000002_2": {"id": "aabbcc000002_2", "type": "SNDC-0D4P10WW", "category": "light", "gen": 2,
+                         "channels_count": 4, "channel": 2, "name": "Strip stairs", "room_id": 2, "position": 4},
+      "aabbcc000002_3": {"id": "aabbcc000002_3", "type": "SNDC-0D4P10WW", "category": "light", "gen": 2,
+                         "channels_count": 4, "channel": 3, "name": "Strip spare", "room_id": -10, "position": 5},
+      "aabbcc000004": {"id": "aabbcc000004", "type": "SNSN-0D24X", "category": "inputs_reader", "gen": 2,
+                       "channels_count": 1, "channel": 0, "name": "Buttons", "room_id": 2, "position": 6},
+      "aabbcc000004_100": {"id": "aabbcc000004_100", "type": "peripheral-device", "category": "sensor", "gen": 2,
+                           "channels_count": 1, "channel": 100, "name": "Probe", "room_id": 2, "position": 7}
+    },
+    "rooms": {
+      "1": {"id": 1, "name": "Kitchen", "position": 1},
+      "2": {"id": 2, "name": "Hall", "position": 2}
+    },
+    "groups": {},
+    "dashboards": {}
+  }
+}

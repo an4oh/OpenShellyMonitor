@@ -1,0 +1,27 @@
+# Read-only web dashboard (`shelly-monitor serve`), companion of shelly-monitor.service.
+# Same user, env file and state directory as the poller, so it reads the same database.
+#   sudo cp deploy/systemd/shelly-monitor-web.service /etc/systemd/system/
+#   sudo systemctl daemon-reload && sudo systemctl enable --now shelly-monitor-web
+# No authentication: keep SHELLY_HTTP_HOST=127.0.0.1 (default) and use a reverse proxy
+# with authentication if it must be reachable from other machines.
+[Unit]
+Description=Shelly Monitor web dashboard
+After=network.target shelly-monitor.service
+
+[Service]
+Type=simple
+User=shelly-monitor
+StateDirectory=shelly-monitor
+WorkingDirectory=/var/lib/shelly-monitor
+EnvironmentFile=/etc/shelly-monitor.env
+Environment=SHELLY_DB=/var/lib/shelly-monitor/shelly-monitor.db
+ExecStart=/usr/local/bin/shelly-monitor serve
+Restart=on-failure
+RestartSec=10
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
