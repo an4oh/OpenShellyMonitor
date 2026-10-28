@@ -188,9 +188,14 @@ input[type=text] { height: 36px; padding: 0 10px; background: var(--panel); colo
 .g-ch input { width: 16px; height: 16px; accent-color: var(--accent); }
 .chk { font-size: 13px; color: var(--text-2); display: inline-flex; align-items: center; gap: 6px; }
 .table-head .left { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.foot { padding: 0 32px 32px; max-width: 1400px; width: 100%; margin: 0 auto; }
+.backup > summary { padding: 14px 18px; cursor: pointer; font-size: 14px; font-weight: 600; color: var(--text-2); }
+.backup-body { display: flex; flex-direction: column; gap: 12px; padding: 0 18px 16px; }
+.backup-body .row { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+.backup-body input[type=file] { font: inherit; font-size: 13px; color: var(--text-2); max-width: 100%; }
 
 @media (max-width: 900px) {
-  header, main, .error-wrap { padding-left: 16px; padding-right: 16px; }
+  header, main, .error-wrap, .foot { padding-left: 16px; padding-right: 16px; }
   .dev-row { grid-template-columns: 24px minmax(0, 1fr) auto; grid-template-areas: "i n s" "i m h"; row-gap: 2px; }
   .dev-row .kicon { grid-area: i; }
   .dev-row .nm { grid-area: n; }
@@ -242,6 +247,7 @@ input[type=text] { height: 36px; padding: 0 10px; background: var(--panel); colo
         <a id="exp-report-pdf" href="/api/report.pdf" download>Report PDF</a>
       </div>
     </details>
+    <button type="button" class="btn" id="logout" hidden>Esci</button>
   </div>
 </header>
 
@@ -369,6 +375,25 @@ input[type=text] { height: 36px; padding: 0 10px; background: var(--panel); colo
   </section>
 </main>
 
+<footer class="foot">
+  <details class="panel backup" id="backup">
+    <summary>Backup del database</summary>
+    <div class="backup-body">
+      <p class="note" id="bk-auto">&nbsp;</p>
+      <div class="row">
+        <a class="btn-link" id="bk-download" href="/api/backup" download>Scarica backup</a>
+        <span class="note">File .db.gz con tutti i dati: conservane una copia fuori dal server.</span>
+      </div>
+      <form class="row" id="bk-restore" hidden>
+        <label class="note" for="bk-file">Ripristina da un backup (.db.gz o .db)</label>
+        <input id="bk-file" type="file" accept=".gz,.db,application/gzip,application/octet-stream" required>
+        <button type="submit" class="btn danger" id="bk-restore-btn">Ripristina</button>
+      </form>
+      <p class="note" id="bk-msg" role="status" aria-live="polite"></p>
+    </div>
+  </details>
+</footer>
+
 <script>
 (function () {
   "use strict";
@@ -440,6 +465,7 @@ input[type=text] { height: 36px; padding: 0 10px; background: var(--panel); colo
   }
   function getJSON(path) {
     return fetch(path, { cache: "no-store" }).then(function (r) {
+      if (r.status === 401) { location.assign("/login?next=" + encodeURIComponent(location.pathname + location.search)); }
       return r.json().catch(function () { return {}; }).then(function (body) {
         if (!r.ok) throw new Error(body.error || ("HTTP " + r.status));
         return body;
@@ -1229,10 +1255,64 @@ input[type=text] { height: 36px; padding: 0 10px; background: var(--panel); colo
   $("g-e-q").addEventListener("input", renderEditor);
   $("g-e-save").addEventListener("click", saveMembers);
   $("g-e-cancel").addEventListener("click", closeEditor);
+  // ---- backup and restore -----------------------------------------------------------
+  function fmtBytes(n) {
+    if (n == null) return "–";
+    if (n < 1024) return n + " B";
+    return n < 1048576 ? NF1.format(n / 1024) + " KB" : NF1.format(n / 1048576) + " MB";
+  }
+  function loadBackupStatus() {
+    return getJSON("/api/backup/status").then(function (s) {
+      var a = s.auto, t;
+      t = a.enabled ? "Backup automatico ogni " + NF1.format(a.interval_hours) + " h in " + a.dir +
+        " (ultimi " + a.keep + "). " : "Backup automatico disattivato (SHELLY_BACKUP_DIR non impostata). ";
+      t += s.last ? "Ultimo: " + DATETIME_S.format(new Date(s.last.ts * 1000)) + " · " + fmtBytes(s.last.size) + "."
+        : (a.enabled ? "Nessun backup automatico finora." : "");
+      $("bk-auto").textContent = t;
+      $("bk-restore").hidden = s.readonly;
+    }).catch(function (err) { $("bk-auto").textContent = "Stato backup non disponibile: " + err.message; });
+  }
+  $("backup").addEventListener("toggle", function () { if ($("backup").open) loadBackupStatus(); });
+  $("bk-restore").addEventListener("submit", function (e) {
+    e.preventDefault();
+    var f = $("bk-file").files[0];
+    if (!f) return;
+    if (!window.confirm("Sostituire l'intero database con “" + f.name + "”? I dati attuali vengono persi: " +
+        "scarica prima un backup se ti servono.")) return;
+    $("bk-restore-btn").disabled = true;
+    $("bk-msg").textContent = "Ripristino in corso…";
+    fetch("/api/restore", { method: "POST", body: f, headers: { "X-Requested-With": "shelly-monitor",
+      "Content-Type": /\.gz$/i.test(f.name) ? "application/gzip" : "application/octet-stream" } })
+      .then(function (r) {
+        return r.json().catch(function () { return {}; }).then(function (b) {
+          if (!r.ok) throw new Error(b.error || ("HTTP " + r.status));
+          return b;
+        });
+      })
+      .then(function (b) {
+        $("bk-msg").textContent = "Ripristino completato: campioni " +
+          (b.samples_before == null ? "–" : NF0.format(b.samples_before)) + " → " + NF0.format(b.samples_after) +
+          ", schema " + b.schema_version + (b.migrated ? " (aggiornato a " + b.schema_version_now + ")" : "") + ".";
+        $("bk-file").value = "";
+        loadBackupStatus();
+        return Promise.all([
+          getJSON("/api/homes").then(function (homes) { state.homes = homes; renderFilters(); }),
+          refreshGroups()
+        ]).catch(function () { /* keep the old filters */ }).then(load);
+      })
+      .catch(function (err) { $("bk-msg").textContent = "Ripristino non riuscito: " + err.message; })
+      .then(function () { $("bk-restore-btn").disabled = false; });
+  });
+
+  $("logout").addEventListener("click", function () {
+    fetch("/logout", { method: "POST", headers: { "X-Requested-With": "shelly-monitor" } })
+      .catch(function () { /* the cookie is cleared server side; go to the login page anyway */ })
+      .then(function () { location.assign("/login"); });
+  });
   renderHead();
   Promise.all([
     getJSON("/api/homes").then(function (homes) { state.homes = homes; renderFilters(); }),
-    getJSON("/api/config").then(function (c) { grp.config = c; }),
+    getJSON("/api/config").then(function (c) { grp.config = c; $("logout").hidden = !c.auth; }),
     refreshGroups()
   ]).catch(function () { /* filters stay hidden */ }).then(load);
 })();

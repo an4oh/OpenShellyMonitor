@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Primitives (password hash, cookie, sanitize_next, login page) are duplicated in src/shelly_monitor/auth.py: keep them aligned.
 """Password login sidecar for a Shelly Monitor dashboard behind nginx (stdlib only).
 
 Secrets (never in the repo) live in ~/.config/shelly-monitor/auth.env (override: SHELLY_AUTH_ENV):

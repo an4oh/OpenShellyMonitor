@@ -5,6 +5,56 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-10-28
+
+### Added
+- Database backup and restore. `shelly-monitor backup [--out FILE|-] [--no-compress]`: consistent
+  snapshot through the SQLite online backup API (safe while polling, WAL or `delete`), gzip by default,
+  `-` writes to stdout. `shelly-monitor restore FILE [--yes]`: validates the file (SQLite, plain or gzip,
+  `integrity_check`, shelly-monitor tables, schema not newer than this version), replaces the database
+  atomically, removes leftover `-wal`/`-shm`, migrates older schemas; asks for confirmation and refuses
+  while another process has the database open (non-empty `-wal` or no exclusive lock).
+- Automatic backups: `SHELLY_BACKUP_DIR` (unset = off), `SHELLY_BACKUP_INTERVAL_HOURS` (default 24),
+  `SHELLY_BACKUP_KEEP` (default 14). The poller (`run`, `serve --poll`) writes
+  `shelly-monitor-YYYYmmdd-HHMMSS.db.gz` after a successful cycle when due and deletes the oldest;
+  failures are warnings. The Azure template sets `SHELLY_BACKUP_DIR=/data/backups`.
+- Dashboard: section *Backup del database* with download (`GET /api/backup`, also when read-only),
+  restore upload (`POST /api/restore`: `X-Requested-With`, `Content-Length` required, at most
+  `SHELLY_RESTORE_MAX_MB`, default 200; 403 with `SHELLY_WEB_READONLY=1`; JSON with samples before/after
+  and schema version) and the state of automatic backups (`GET /api/backup/status`). With `serve --poll`
+  a restore waits for the running cycle, pauses the poller and makes it reopen the database.
+- `serve --poll`: the poller (same loop as `run`: aligned to `SHELLY_INTERVAL`, activity log, shared
+  throttle) runs in a background thread of the dashboard process, with its own SQLite connection:
+  one process, one port. Poller errors are logged and never stop the server; if the loop crashes it
+  is restarted after 60 s (ERROR in the log). Configuration errors stop the command before listening.
+- `GET /healthz` (never behind the login, meant as liveness probe): `{"ok", "last_ok_poll", "stale",
+  "poller": "running"|"off"|"dead"}`. 503 only when `--poll` is on and the poller loop is dead (crashed,
+  waiting for its restart); a cloud outage or a wrong key only sets `stale: true` (last successful
+  cycle older than 5 x `SHELLY_INTERVAL`), so the container is not restarted in a loop.
+- `serve` bound to an address other than 127.0.0.1/localhost without a password logs a WARNING.
+- Optional built-in password login (new module `auth.py`, primitives shared with the nginx sidecar
+  `deploy/public/auth_server.py`): enabled by `SHELLY_WEB_PASSWORD` (plain, hashed with scrypt at
+  startup) or `SHELLY_WEB_PASSWORD_HASH` (`scrypt$N$r$p$salt$hash`). Signed cookie `sm_session`
+  (HttpOnly, SameSite=Lax, `Secure` on https), lifetime `SHELLY_WEB_SESSION_DAYS` (default 7),
+  bound to the password (a new password invalidates every session) and to
+  `SHELLY_WEB_COOKIE_SECRET` (hex; random when unset: sessions end at every restart). `GET/POST
+  /login` (own CSP by hash, `form-action 'self'`, sanitized `next`, 1 s delay on failure, 429 after
+  10 failures in 10 minutes per client IP), `POST /logout` (revokes the cookie). Anonymous requests:
+  pages redirect to `/login`, everything else answers 401. `SHELLY_WEB_TRUST_PROXY=1` takes the client
+  IP and the scheme from `X-Forwarded-For`/`X-Forwarded-Proto`; `SHELLY_WEB_SECURE_COOKIE=1` forces
+  `Secure`. `/api/config` reports `auth`; the dashboard shows an *Esci* button when it is on.
+- `SHELLY_DB_JOURNAL=delete` for databases on network filesystems (SMB/NFS shares, where WAL does
+  not work): rollback journal with `synchronous=NORMAL`; an existing WAL database is checkpointed and
+  switched at the next read-write open. Default `wal`, unchanged.
+
+### Changed
+- SQLite busy timeout is 10 s on every connection (was 30 s, read-only connections included).
+- `serve --help` and the startup log say whether the login is enabled.
+
+### Fixed
+- A client closing the connection mid-response (e.g. leaving the page) is logged at DEBUG instead of
+  an ERROR with two tracebacks.
+
 ## [0.7.0] - 2026-10-27
 
 ### Added

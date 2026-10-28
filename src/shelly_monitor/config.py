@@ -160,3 +160,56 @@ def cycle_warning(homes: int, gap: float, interval: int, per_cycle: int = 1) -> 
                 f"{REFRESH_REQUESTS + per_cycle - 1} requests x "
                 f"{gap:g} s), more than SHELLY_INTERVAL {interval} s: that cycle will overrun")
     return None
+
+
+JOURNAL_MODES = ("wal", "delete")
+
+
+def db_journal(env=os.environ) -> str:
+    """SHELLY_DB_JOURNAL: SQLite journal mode, `wal` (default) or `delete` (rollback journal, for
+    databases on network filesystems such as SMB/NFS shares, where WAL shared memory does not work)."""
+    raw = (env.get("SHELLY_DB_JOURNAL") or "wal").strip().lower()
+    if raw not in JOURNAL_MODES:
+        raise ConfigError(f"SHELLY_DB_JOURNAL must be 'wal' or 'delete' (got {raw!r})")
+    return raw
+
+
+@dataclass(frozen=True)
+class BackupConfig:
+    """Automatic backups written by the poller: `dir` None = disabled."""
+    dir: str | None
+    interval_hours: float = 24.0
+    keep: int = 14
+
+
+def backup_config(env=os.environ) -> BackupConfig:
+    """SHELLY_BACKUP_DIR (empty = off), SHELLY_BACKUP_INTERVAL_HOURS (default 24, 0 = after every
+    successful cycle) and SHELLY_BACKUP_KEEP (default 14, at least 1)."""
+    folder = (env.get("SHELLY_BACKUP_DIR") or "").strip() or None
+    raw = (env.get("SHELLY_BACKUP_INTERVAL_HOURS") or "").strip()
+    try:
+        hours = float(raw) if raw else 24.0
+    except ValueError:
+        hours = -1.0
+    if not (math.isfinite(hours) and hours >= 0):
+        raise ConfigError(f"SHELLY_BACKUP_INTERVAL_HOURS must be a number of hours >= 0 (got {raw!r})")
+    raw = (env.get("SHELLY_BACKUP_KEEP") or "").strip()
+    try:
+        keep = int(raw) if raw else 14
+    except ValueError:
+        keep = 0
+    if keep < 1:
+        raise ConfigError(f"SHELLY_BACKUP_KEEP must be an integer >= 1 (got {raw!r})")
+    return BackupConfig(folder, hours, keep)
+
+
+def restore_max_mb(env=os.environ) -> int:
+    """SHELLY_RESTORE_MAX_MB: largest backup accepted by the dashboard upload (default 200 MB)."""
+    raw = (env.get("SHELLY_RESTORE_MAX_MB") or "").strip()
+    try:
+        value = int(raw) if raw else 200
+    except ValueError:
+        value = 0
+    if value < 1:
+        raise ConfigError(f"SHELLY_RESTORE_MAX_MB must be an integer >= 1 (got {raw!r})")
+    return value

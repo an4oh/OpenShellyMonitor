@@ -54,10 +54,21 @@ chmod 600 .env
 | `SHELLY_REQUEST_GAP` | `5` | no | Minimum seconds between two cloud requests, all homes together (min 1.1) |
 | `SHELLY_EVENT_LOG` | `1` | no | Read the cloud activity log every cycle (one more request per home). `0` disables it |
 | `SHELLY_DB` | `./shelly-monitor.db` | no | SQLite file |
+| `SHELLY_DB_JOURNAL` | `wal` | no | SQLite journal mode: `wal` or `delete` (use `delete` when the DB is on a network filesystem such as SMB/NFS) |
+| `SHELLY_BACKUP_DIR` | - | no | Folder for automatic backups written by the poller (`run`, `serve --poll`). Unset: off |
+| `SHELLY_BACKUP_INTERVAL_HOURS` | `24` | no | Hours between automatic backups (`0`: after every successful cycle) |
+| `SHELLY_BACKUP_KEEP` | `14` | no | Automatic backups to keep; older ones are deleted |
+| `SHELLY_RESTORE_MAX_MB` | `200` | no | Largest backup accepted by the dashboard restore upload |
 | `SHELLY_LOG_LEVEL` | `INFO` | no | `DEBUG`, `INFO`, `WARNING`, `ERROR`. Logs go to stderr |
 | `SHELLY_HTTP_HOST` | `127.0.0.1` | no | Dashboard bind address (`serve --host` wins) |
 | `SHELLY_HTTP_PORT` | `8787` | no | Dashboard port (`serve --port` wins) |
 | `SHELLY_WEB_READONLY` | `0` | no | `1` makes the dashboard refuse every write (custom groups become CLI-only) |
+| `SHELLY_WEB_PASSWORD` | - | no | Enables the built-in password login (plain text, hashed with scrypt at startup). Unset with no hash: no authentication |
+| `SHELLY_WEB_PASSWORD_HASH` | - | no | Same as `SHELLY_WEB_PASSWORD` but already hashed: `scrypt$N$r$p$salt_hex$hash_hex`. Set only one of the two |
+| `SHELLY_WEB_COOKIE_SECRET` | random | no | Hex key (at least 32 hex chars) that signs session cookies. Unset: random at startup, sessions end at every restart |
+| `SHELLY_WEB_SESSION_DAYS` | `7` | no | Login session lifetime in days (1-365) |
+| `SHELLY_WEB_TRUST_PROXY` | `0` | no | `1` behind a trusted reverse proxy: client IP from `X-Forwarded-For` (login rate limit), https from `X-Forwarded-Proto` |
+| `SHELLY_WEB_SECURE_COOKIE` | `0` | no | `1` always marks the session cookie `Secure` (dashboard reached only over https) |
 
 Example `.env` for two homes:
 
@@ -86,8 +97,9 @@ shelly-monitor homes --name 3f9a1c2b7d4e "Home A" # KEY_ID or current name; wins
 
 ## Run
 
-Pick one of the three ways below. All of them run the poller unattended (`shelly-monitor run`),
-which polls every `SHELLY_INTERVAL` seconds and stops cleanly on SIGTERM.
+Pick one of the ways below. All of them run the poller unattended, which polls every
+`SHELLY_INTERVAL` seconds and stops cleanly on SIGTERM: `shelly-monitor run` (poller only) or
+`shelly-monitor serve --poll` (poller and dashboard in one process, used by the Docker image).
 
 ### a) venv or pipx
 
@@ -124,17 +136,19 @@ docker compose up -d --build
 docker compose logs -f shelly-monitor
 ```
 
-The compose file starts two containers: the poller and `web`, the dashboard on
-`http://127.0.0.1:8787/` (localhost only). The database is in the named volume `shelly-data`
-(`/data/shelly-monitor.db` inside the containers). Run commands inside the poller container:
+The compose file starts one container running `serve --host 0.0.0.0 --poll`: the poller and the
+dashboard on `http://127.0.0.1:8787/` (published on localhost only). Set `SHELLY_WEB_PASSWORD` in
+`.env` before publishing the port elsewhere: it turns on the built-in login. The database is in
+the named volume `shelly-data` (`/data/shelly-monitor.db` inside the container). Run commands
+inside the container:
 
 ```sh
 docker compose exec shelly-monitor shelly-monitor devices --header
 docker compose exec shelly-monitor shelly-monitor report --group month
 ```
 
-The containers run as uid/gid `10001`. To keep the database in a host folder, replace the volume
-with `- ./data:/data` in both services and run `mkdir -p data && sudo chown 10001:10001 data`.
+The container runs as uid/gid `10001`. To keep the database in a host folder, replace the volume
+with `- ./data:/data` and run `mkdir -p data && sudo chown 10001:10001 data`.
 
 ### c) systemd
 
@@ -166,6 +180,14 @@ sudo systemctl enable --now shelly-monitor shelly-monitor-web
 
 The database is `/var/lib/shelly-monitor/shelly-monitor.db`. The units expect the command at
 `/usr/local/bin/shelly-monitor`; if you installed it elsewhere (e.g. a venv), edit `ExecStart`.
+
+### d) Azure Container Apps
+
+A GitHub Actions workflow builds the image on every push to `main`, publishes it to GHCR and rolls
+it out to Azure Container Apps: one always-on replica (poller and dashboard), HTTPS ingress, the
+built-in password login and the SQLite database on an Azure Files share. One-time setup with
+`deploy/azure/setup.sh` and `deploy/azure/github-oidc.sh`; costs are roughly 5-20 USD a month.
+Step by step: [deploy/azure/README.md](deploy/azure/README.md).
 
 ### Check that it works
 
@@ -282,12 +304,13 @@ timeline, the last transitions and the activity log. A *Devices* page lists ever
 state; a *Gruppi* page edits custom groups. CSV and PDF exports are in the "Esporta" menu.
 The interface is in Italian.
 
-It opens the database read-only and can run next to the poller. It is a single HTML page with no
+It opens the database read-only (except for custom group edits and the restore) and can run next to the poller. It is a single HTML page with no
 external fonts or scripts.
 
-**The dashboard has no authentication.** Anyone who can reach the port can read your data and edit
-custom groups. Keep the default bind `127.0.0.1`, or put it behind a reverse proxy that adds
-authentication and TLS. Set `SHELLY_WEB_READONLY=1` if people who should not edit groups can reach it.
+**Without `SHELLY_WEB_PASSWORD` the dashboard has no authentication.** Anyone who can reach the
+port can read your data and edit custom groups. Keep the default bind `127.0.0.1`, or set
+`SHELLY_WEB_PASSWORD` (built-in login; `SHELLY_WEB_TRUST_PROXY=1` behind a TLS reverse proxy) and
+serve it over HTTPS. Set `SHELLY_WEB_READONLY=1` if people who should not edit groups can reach it.
 
 [deploy/public/README.md](deploy/public/README.md) describes a ready setup: nginx, HTTPS with
 Let's Encrypt and a small password login, e.g. on `shelly.example.com`.
@@ -333,12 +356,54 @@ Input-only devices (i3, i4) are listed with their online state only.
 - No telemetry. The only outgoing requests go to your Shelly Cloud server.
 - Cloud keys are never written to the database; only their `key_id` fingerprint is.
 
-The database runs in WAL mode, so do not copy it with `cp` while the poller is running. Use
-`sqlite3 .backup` (from the `sqlite3` command-line package), which is safe on a live database:
+The database runs in WAL mode, so do not copy it with `cp` while the poller is running: use
+`shelly-monitor backup` (see [Backup and restore](#backup-and-restore)), which is safe on a live
+database.
+
+## Backup and restore
+
+Backups are consistent snapshots taken with SQLite's online backup API: safe while the poller
+writes, with `wal` or `delete` journaling. They are gzip-compressed SQLite files
+(`shelly-monitor-YYYYmmdd-HHMMSS.db.gz`); `gunzip` gives a database any SQLite tool can open.
+
+**Command line**
 
 ```sh
-sqlite3 ~/shelly-monitor/shelly-monitor.db ".backup '/path/to/backup/shelly-monitor-$(date +%F).db'"
+shelly-monitor backup                              # ./shelly-monitor-YYYYmmdd-HHMMSS.db.gz
+shelly-monitor backup --out /backups/sm.db.gz
+shelly-monitor backup --out - | ssh host 'cat > sm.db.gz'   # to stdout
+shelly-monitor backup --no-compress --out sm.db    # plain SQLite file
+
+shelly-monitor restore shelly-monitor-20261028-030000.db.gz          # asks for confirmation
+shelly-monitor restore shelly-monitor-20261028-030000.db.gz --yes
 ```
+
+`restore` replaces the whole database. **Stop the poller and the dashboard first** (`run`,
+`serve`): the command refuses to run while another process has the database open (a non-empty
+`-wal` file, or no exclusive lock within half a second). To restore while `serve` keeps running,
+use the dashboard. Before the replacement the file is validated: it must be a SQLite database
+(plain or gzip) that passes `PRAGMA integrity_check`, has the shelly-monitor tables and a schema
+not newer than the installed version; anything else is refused and the database is left untouched.
+Older backups are migrated to the current schema.
+
+**Dashboard.** The *Backup del database* section at the bottom of every page has a **Scarica
+backup** button (`GET /api/backup`, allowed also with `SHELLY_WEB_READONLY=1`) and a restore form
+(`POST /api/restore` with the file as body, at most `SHELLY_RESTORE_MAX_MB` MB, refused with
+`SHELLY_WEB_READONLY=1`). With `serve --poll` the restore waits for the running polling cycle,
+pauses the poller during the replacement and lets it reopen the new database. Both need the login
+when it is enabled. `GET /api/backup/status` reports the automatic backup settings and the last one.
+
+**Automatic.** Set `SHELLY_BACKUP_DIR` and the poller (`run` or `serve --poll`) writes a backup
+there after a successful cycle every `SHELLY_BACKUP_INTERVAL_HOURS` (default 24; the time of the
+last one is kept in the database), keeping the newest `SHELLY_BACKUP_KEEP` (default 14). Only files
+named `shelly-monitor-YYYYmmdd-HHMMSS.db[.gz]` are ever deleted. Failures are logged as warnings and
+never stop polling.
+
+A backup folder on the same disk or share as the database does not protect against losing that
+disk: copy backups elsewhere too. On Azure Container Apps `deploy/azure/setup.sh` sets
+`SHELLY_BACKUP_DIR=/data/backups` on the same Azure Files share; download a copy now and then
+with the dashboard button. Restoring there is done from the dashboard (the container has no shell
+you would normally use), see [deploy/azure/README.md](deploy/azure/README.md#5-notes).
 
 ## Development
 

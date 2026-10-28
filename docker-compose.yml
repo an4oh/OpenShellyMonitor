@@ -3,35 +3,27 @@ services:
     build: .
     image: shelly-monitor:latest
     restart: unless-stopped
+    # Default command of the image: poller + dashboard in one process.
+    command: ["serve", "--host", "0.0.0.0", "--poll"]
     env_file:
       - path: .env
         required: false
     environment:
       SHELLY_DB: /data/shelly-monitor.db
+      # Daily automatic backups (last 14 kept) next to the database; download copies elsewhere
+      # with the dashboard's "Scarica backup" button or `docker compose exec -T shelly-monitor
+      # shelly-monitor backup --out - > backup.db.gz`.
+      # SHELLY_BACKUP_DIR: /data/backups
       TZ: Europe/Rome  # reports group by day/month in this timezone
+    ports:
+      # Localhost only. To expose the dashboard (e.g. "8787:8787" or behind a reverse
+      # proxy), set SHELLY_WEB_PASSWORD in .env first: it enables the built-in login.
+      # Behind a TLS reverse proxy also set SHELLY_WEB_TRUST_PROXY=1.
+      - "127.0.0.1:8787:8787"
     volumes:
       - shelly-data:/data
       # Bind mount instead of the named volume (see README):
       # - ./data:/data
-
-  # Read-only web dashboard. No authentication: the port is published on
-  # localhost only; put a reverse proxy with auth in front to expose it.
-  web:
-    image: shelly-monitor:latest
-    restart: unless-stopped
-    depends_on:
-      - shelly-monitor
-    command: serve --host 0.0.0.0
-    env_file:
-      - path: .env
-        required: false
-    environment:
-      SHELLY_DB: /data/shelly-monitor.db
-      TZ: Europe/Rome
-    ports:
-      - "127.0.0.1:8787:8787"
-    volumes:
-      - shelly-data:/data
 
 volumes:
   shelly-data:

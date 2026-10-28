@@ -2,14 +2,19 @@
 
 from __future__ import annotations
 
+import contextlib
+import gzip
+import os
 import re
 import sqlite3
+import tempfile
 import time
+import zlib
 from collections.abc import Iterable, Iterator
 from pathlib import Path
 
 from .cloud import ON_KINDS, ChannelMeta, DeviceInfo, DeviceLists, Event, Sample
-from .config import DEFAULT_HOME_NAME
+from .config import DEFAULT_HOME_NAME, db_journal
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS samples (
@@ -107,13 +112,19 @@ def _columns(conn: sqlite3.Connection, table: str) -> set[str]:
 SCHEMA_VERSION = 6  # PRAGMA user_version of the current schema (5 = 0.6: custom groups, 6: events)
 
 
-def _enable_wal(conn: sqlite3.Connection, attempts: int = 50) -> None:
-    """Switch to WAL once. Changing the journal mode needs an exclusive lock and SQLite
-    does not apply the busy timeout to it, so concurrent openers retry briefly."""
+BUSY_TIMEOUT_MS = 10_000
+
+
+def _set_journal(conn: sqlite3.Connection, mode: str, attempts: int = 50) -> None:
+    """Switch the journal mode (persistent in the file) when it differs. Changing it needs an
+    exclusive lock and SQLite does not apply the busy timeout to it, so concurrent openers retry
+    briefly. Leaving WAL checkpoints the WAL file into the database first."""
     for i in range(attempts):
         try:
-            if conn.execute("PRAGMA journal_mode").fetchone()[0].lower() != "wal":
-                conn.execute("PRAGMA journal_mode=WAL")
+            if conn.execute("PRAGMA journal_mode").fetchone()[0].lower() != mode:
+                got = conn.execute(f"PRAGMA journal_mode={mode.upper()}").fetchone()[0].lower()
+                if got != mode:
+                    raise sqlite3.OperationalError(f"database is locked (journal mode still {got})")
             return
         except sqlite3.OperationalError as e:
             if "locked" not in str(e) and "busy" not in str(e) or i == attempts - 1:
@@ -217,20 +228,59 @@ def _filters(home: str | None, room: str | None, alias: str = "") -> tuple[str, 
 
 
 class Store:
-    def __init__(self, path: str, readonly: bool = False, home: str = DEFAULT_HOME_NAME):
-        """`home` is only used to label data migrated from a 0.1.x database."""
+    def __init__(self, path: str, readonly: bool = False, home: str = DEFAULT_HOME_NAME,
+                 journal: str | None = None, shared: bool = False):
+        """`home` is only used to label data migrated from a 0.1.x database. `journal` is the
+        journal mode of read-write connections, `wal` or `delete` (default: SHELLY_DB_JOURNAL);
+        read-only connections use whatever the file has. `shared`: the read-write connection may
+        be closed by another thread (the in-process poller's store, closed by a restore)."""
+        self.path = str(path)
+        timeout = BUSY_TIMEOUT_MS / 1000
         if readonly:
             uri = Path(path).resolve().as_uri() + "?mode=ro"
-            self.conn = sqlite3.connect(uri, uri=True, timeout=30, check_same_thread=False)
+            self.conn = sqlite3.connect(uri, uri=True, timeout=timeout, check_same_thread=False)
             self.conn.row_factory = sqlite3.Row
+            self.conn.execute(f"PRAGMA busy_timeout = {BUSY_TIMEOUT_MS}")
             return
-        self.conn = sqlite3.connect(path, timeout=30)
+        mode = journal or db_journal()
+        self.conn = sqlite3.connect(path, timeout=timeout, check_same_thread=not shared)
         self.conn.row_factory = sqlite3.Row
-        _enable_wal(self.conn)
+        self.conn.execute(f"PRAGMA busy_timeout = {BUSY_TIMEOUT_MS}")
+        _set_journal(self.conn, mode)
+        if mode == "delete":
+            self.conn.execute("PRAGMA synchronous = NORMAL")
         _migrate(self.conn, home)
 
     def close(self) -> None:
         self.conn.close()
+
+    def backup_to(self, dest, compress: bool = True) -> int:
+        """Write a consistent snapshot of the database to `dest` (a path, or a binary file object),
+        gzip-compressed unless `compress` is False. Uses the SQLite online backup API, so it is safe
+        with WAL and rollback journals while other connections write. A path is written to
+        `dest.part` and then renamed. Returns the number of bytes written."""
+        with tempfile.TemporaryDirectory(prefix="shelly-backup-") as tmp:
+            snap = os.path.join(tmp, "snapshot.db")
+            out = sqlite3.connect(snap)
+            try:
+                self.conn.backup(out)
+                out.execute("PRAGMA journal_mode=DELETE")  # a standalone file, also from a WAL source
+            finally:
+                out.close()
+            if not isinstance(dest, (str, os.PathLike)):
+                return _copy_out(snap, dest, compress)
+            part = f"{os.fspath(dest)}.part"
+            try:
+                with open(part, "wb") as f:
+                    n = _copy_out(snap, f, compress)
+                    f.flush()
+                    os.fsync(f.fileno())
+                os.replace(part, dest)
+            except BaseException:
+                with contextlib.suppress(FileNotFoundError):
+                    os.unlink(part)
+                raise
+            return n
 
     def __enter__(self) -> "Store":
         return self
@@ -688,3 +738,132 @@ class Store:
                 "INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
                 (key, value),
             )
+
+
+# --- backup and restore ----------------------------------------------------------------------
+GZIP_MAGIC = b"\x1f\x8b"
+SQLITE_MAGIC = b"SQLite format 3\x00"
+REQUIRED_TABLES = ("samples", "devices", "homes")
+_CHUNK = 1 << 20
+
+
+class RestoreError(ValueError):
+    """The file cannot be restored; the message is meant for the user. The database is untouched."""
+
+
+class _Counter:
+    def __init__(self, f):
+        self.f, self.n = f, 0
+
+    def write(self, b) -> int:
+        self.n += len(b)
+        self.f.write(b)
+        return len(b)
+
+    def flush(self) -> None:
+        self.f.flush()
+
+
+def _copy_out(src: str, f, compress: bool) -> int:
+    counter = _Counter(f)
+    with open(src, "rb") as fin:
+        if compress:
+            with gzip.GzipFile(filename="", mode="wb", fileobj=counter, compresslevel=6) as gz:
+                while chunk := fin.read(_CHUNK):
+                    gz.write(chunk)
+        else:
+            while chunk := fin.read(_CHUNK):
+                counter.write(chunk)
+    counter.flush()
+    return counter.n
+
+
+def _unpack(src: str, dest: str, max_bytes: int | None) -> None:
+    with open(src, "rb") as f:
+        gz = f.read(2) == GZIP_MAGIC
+    total = 0
+    try:
+        with (gzip.open(src, "rb") if gz else open(src, "rb")) as fin, open(dest, "wb") as fout:
+            while chunk := fin.read(_CHUNK):
+                total += len(chunk)
+                if max_bytes is not None and total > max_bytes:
+                    raise RestoreError(f"the database is larger than the limit ({max_bytes / 1e6:.0f} MB)")
+                fout.write(chunk)
+            fout.flush()
+            os.fsync(fout.fileno())
+    except (gzip.BadGzipFile, EOFError, zlib.error) as e:
+        raise RestoreError(f"not a valid gzip file ({e or 'truncated'})") from None
+
+
+def _validate(path: str) -> int:
+    """Check a candidate database; returns its PRAGMA user_version."""
+    with open(path, "rb") as f:
+        if f.read(16) != SQLITE_MAGIC:
+            raise RestoreError("not a SQLite database")
+    try:
+        conn = sqlite3.connect(path)  # private temporary file: clear a WAL flag, so read-only opening works
+        try:
+            conn.execute("PRAGMA journal_mode=DELETE")
+        finally:
+            conn.close()
+        conn = sqlite3.connect(Path(path).resolve().as_uri() + "?mode=ro", uri=True)
+        try:
+            problems = [r[0] for r in conn.execute("PRAGMA integrity_check(5)")]
+            if problems != ["ok"]:
+                raise RestoreError("the database is corrupt (integrity check: " + "; ".join(problems)[:300] + ")")
+            version = conn.execute("PRAGMA user_version").fetchone()[0]
+            if version > SCHEMA_VERSION:
+                raise RestoreError(f"the backup comes from a newer version of shelly-monitor (schema {version}, "
+                                   f"this version supports up to {SCHEMA_VERSION}): upgrade first")
+            tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
+            missing = [t for t in REQUIRED_TABLES if t not in tables]
+            if missing:
+                raise RestoreError("not a shelly-monitor database (missing tables: " + ", ".join(missing) + ")")
+            return version
+        finally:
+            conn.close()
+    except sqlite3.DatabaseError as e:
+        raise RestoreError(f"not a valid SQLite database ({e})") from None
+
+
+def _sample_count(path: str) -> int | None:
+    if not os.path.isfile(path):
+        return None
+    try:
+        conn = sqlite3.connect(Path(path).resolve().as_uri() + "?mode=ro", uri=True, timeout=BUSY_TIMEOUT_MS / 1000)
+        try:
+            return conn.execute("SELECT COUNT(*) FROM samples").fetchone()[0]
+        finally:
+            conn.close()
+    except sqlite3.Error:
+        return None
+
+
+def restore_from(src, db_path, *, max_bytes: int | None = None, home: str = DEFAULT_HOME_NAME,
+                 journal: str | None = None) -> dict:
+    """Replace the database at `db_path` with the backup `src` (a .db or .db.gz path).
+
+    The backup is unpacked to `db_path.restore-tmp` (at most `max_bytes` uncompressed), validated
+    (SQLite, integrity check, schema version not newer than this code, shelly-monitor tables),
+    then renamed over the database in one step; leftover -wal/-shm/-journal files of the old
+    database are removed and the new one is opened read-write (journal mode, migrations).
+    Nothing else may have the database open: callers stop or lock the other users first.
+    Raises RestoreError (database untouched) for files that cannot be restored."""
+    db_path = os.fspath(db_path)
+    tmp = db_path + ".restore-tmp"
+    try:
+        _unpack(os.fspath(src), tmp, max_bytes)
+        version = _validate(tmp)
+        before = _sample_count(db_path)
+        os.replace(tmp, db_path)
+        for suffix in ("-wal", "-shm", "-journal"):
+            with contextlib.suppress(FileNotFoundError):
+                os.unlink(db_path + suffix)
+        with Store(db_path, home=home, journal=journal) as st:
+            after = st.count_samples()
+            now = st.conn.execute("PRAGMA user_version").fetchone()[0]
+    finally:
+        with contextlib.suppress(FileNotFoundError):
+            os.unlink(tmp)
+    return {"ok": True, "samples_before": before, "samples_after": after, "schema_version": version,
+            "schema_version_now": now, "migrated": version < now}

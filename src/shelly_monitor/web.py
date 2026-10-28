@@ -1,5 +1,5 @@
-"""Web dashboard (stdlib http.server, no authentication): reads the DB read-only; custom groups are
-writable unless SHELLY_WEB_READONLY=1."""
+"""Web dashboard (stdlib http.server): reads the DB read-only; custom groups are writable unless
+SHELLY_WEB_READONLY=1. Optional password login (see auth.py) and background poller (serve --poll)."""
 
 from __future__ import annotations
 
@@ -11,19 +11,26 @@ import os
 import base64
 import hashlib
 import re
+import shutil
 import signal
 import sqlite3
+import tempfile
 import threading
+import time
 from datetime import date, datetime, timedelta
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from importlib import resources
 from pathlib import Path
-from urllib.parse import parse_qs, urlsplit
+from urllib.parse import parse_qs, quote, urlsplit
 
 from . import __version__
+from . import auth as webauth
+from .backup import backup_filename, last_backup
 from .cloud import EVENT_KINDS, ON_KINDS, event_details
+from .config import BackupConfig, backup_config, default_home_name, restore_max_mb
+from .poller import Maintenance
 from .report import BY, SAMPLE_FIELDS, _safe_cell, aggregate, parse_range, render, write_samples_csv
-from .store import Store
+from .store import RestoreError, Store, restore_from
 
 log = logging.getLogger(__name__)
 
@@ -65,6 +72,18 @@ class Unsupported(ValueError):
     pass
 
 
+class LengthRequired(ValueError):
+    pass
+
+
+class TooLarge(ValueError):
+    pass
+
+
+RESTORE_TYPES = ("application/gzip", "application/x-gzip", "application/octet-stream")
+RESTORE_EXPANSION = 20  # an uploaded backup may decompress to at most 20 x SHELLY_RESTORE_MAX_MB
+
+
 def _index_html() -> bytes:
     return resources.files("shelly_monitor").joinpath("web/index.html").read_bytes()
 
@@ -72,10 +91,11 @@ def _index_html() -> bytes:
 class Dashboard:
     """Query logic, independent of HTTP. One read-only connection per call."""
 
-    def __init__(self, db: str, interval: int, readonly: bool = False):
+    def __init__(self, db: str, interval: int, readonly: bool = False, auth: bool = False):
         self.db = db
         self.interval = interval
         self.readonly = readonly
+        self.auth = auth  # password login enabled (reported by /api/config)
 
     def _store(self) -> Store | None:
         if not Path(self.db).is_file():
@@ -476,7 +496,8 @@ class Groups:
         self.dash = dash
 
     def config(self, q: dict) -> dict:
-        return {"version": __version__, "readonly": self.dash.readonly, "interval_s": self.dash.interval}
+        return {"version": __version__, "readonly": self.dash.readonly, "interval_s": self.dash.interval,
+                "auth": self.dash.auth}
 
     def list(self, q: dict) -> list[dict]:
         lo, hi = self.dash._range(q)
@@ -568,6 +589,11 @@ class Handler(BaseHTTPRequestHandler):
     security_headers: dict = SECURITY_HEADERS  # with the CSP, set by make_server
 
     groups: Groups  # set by make_server
+    auth: webauth.WebAuth | None = None  # password login, set by make_server
+    poller = None  # BackgroundPoller of serve --poll, set by make_server
+    maintenance: Maintenance  # restore coordination with the in-process poller, set by make_server
+    backups: BackupConfig  # automatic backup settings (reported by /api/backup/status)
+    restore_max_mb: int = 200
     GROUP_ROUTES = {"/api/custom-groups": "list", "/api/config": "config"}
 
     JSON_ROUTES = {
@@ -617,12 +643,184 @@ class Handler(BaseHTTPRequestHandler):
         self.close_connection = True
         self._json(code, {"error": message or self.responses.get(code, ("error",))[0]}, {"Connection": "close"})
 
+    # --- login -----------------------------------------------------------------------------
+    def _client_ip(self) -> str:
+        if self.auth is not None and self.auth.trust_proxy:
+            first = (self.headers.get("X-Forwarded-For") or "").split(",")[0].strip()
+            if first:
+                return first
+        return self.client_address[0]
+
+    def _https(self) -> bool:
+        return self.auth.secure_cookie or (
+            self.auth.trust_proxy and (self.headers.get("X-Forwarded-Proto") or "").strip().lower() == "https")
+
+    def _session(self) -> str | None:
+        return webauth.get_cookie(self.headers.get("Cookie"))
+
+    def _logged_in(self) -> bool:
+        return self.auth is None or self.auth.valid(self._session())
+
+    def _set_cookie(self, value: str, max_age: int) -> dict:
+        secure = "; Secure" if self._https() else ""
+        return {"Set-Cookie": f"{webauth.COOKIE_NAME}={value}; HttpOnly{secure}; SameSite=Lax; Path=/; "
+                              f"Max-Age={max_age}"}
+
+    def _login_page(self, status: int, nxt: str, error: str | None = None) -> None:
+        self._send(status, webauth.render_page(nxt, error), "text/html; charset=utf-8",
+                   {"Content-Security-Policy": webauth.login_csp()})
+
+    def _deny(self, url) -> None:
+        """Anonymous request with login enabled: pages go to the login form, the rest gets 401."""
+        if url.path in ("/", "/index.html"):
+            target = url.path + ("?" + url.query if url.query else "")
+            self._send(302, b"", "text/plain", {"Location": "/login?next=" + quote(target, safe="")})
+        else:
+            self._json(401, {"error": "login required"})
+
+    def _post_login(self) -> None:
+        a = self.auth
+        try:
+            length = int(self.headers.get("Content-Length") or 0)
+        except ValueError:
+            length = -1
+        if length < 0 or length > webauth.MAX_BODY:
+            self.close_connection = True
+            return self._json(413, {"error": "body too large"})
+        form = parse_qs(self.rfile.read(length).decode("utf-8", "replace") if length else "")
+        password = (form.get("password") or [""])[0]
+        nxt = webauth.sanitize_next((form.get("next") or [""])[0])
+        ip = self._client_ip()
+        if a.limiter.blocked(ip):
+            log.warning("login refused for %s: too many failed attempts", ip)
+            return self._login_page(429, nxt, webauth.TOO_MANY)
+        if a.check(password):
+            log.info("login from %s", ip)
+            return self._send(303, b"", "text/plain", {"Location": nxt, **self._set_cookie(a.issue(),
+                                                                                        a.session_seconds)})
+        a.limiter.fail(ip)
+        log.warning("failed login from %s", ip)
+        time.sleep(a.fail_delay)
+        self._login_page(401, nxt, webauth.WRONG_PASSWORD)
+
+    def _post_logout(self) -> None:
+        if self.headers.get("X-Requested-With") != "shelly-monitor":
+            return self._json(403, {"error": "missing X-Requested-With: shelly-monitor header"})
+        self.auth.revoke(self._session())
+        self._json(200, {"ok": True}, self._set_cookie("", 0))
+
+    def _health(self) -> None:
+        """Liveness: 503 only when the in-process poller is dead (a container restart helps then).
+        Cloud or key problems only make `stale` true: restarting would not fix them."""
+        p = self.poller
+        if p is None:
+            return self._json(200, {"ok": True, "last_ok_poll": None, "stale": False, "poller": "off"})
+        ref = p.last_ok if p.last_ok is not None else p.started
+        stale = ref is None or time.time() - ref > 5 * self.dashboard.interval
+        alive = bool(p.running)
+        self._json(200 if alive else 503, {"ok": alive, "last_ok_poll": None if p.last_ok is None else int(p.last_ok),
+                                           "stale": stale, "poller": "running" if alive else "dead"})
+
+    # --- backup and restore ------------------------------------------------------------------
+    def _backup(self) -> None:
+        """Consistent gzip snapshot, streamed from a temporary file. Holds only the dashboard's
+        database lock (never the poller's): polling goes on while the snapshot is taken."""
+        with tempfile.TemporaryFile() as f:
+            with _DB_LOCK:
+                store = self.dashboard._store()
+                if store is None:
+                    raise NotFound("database not found")
+                with store:
+                    n = store.backup_to(f)
+            f.seek(0)
+            self.send_response(200)
+            self.send_header("Content-Type", "application/gzip")
+            self.send_header("Content-Length", str(n))
+            headers = {**self.security_headers,
+                       "Content-Disposition": f'attachment; filename="{backup_filename()}"'}
+            for k, v in headers.items():
+                self.send_header(k, v)
+            self.end_headers()
+            if self.command != "HEAD":
+                shutil.copyfileobj(f, self.wfile)
+
+    def _backup_status(self) -> dict:
+        last = None
+        with _DB_LOCK:
+            store = self.dashboard._store()
+            if store is not None:
+                with store:
+                    last = last_backup(store)
+        b = self.backups
+        return {"auto": {"enabled": bool(b.dir), "dir": b.dir, "interval_hours": b.interval_hours, "keep": b.keep},
+                "last": last, "restore_max_mb": self.restore_max_mb, "readonly": self.dashboard.readonly}
+
+    def _restore(self) -> dict:
+        """Body = backup file (.db.gz or .db). Written to a temporary file next to the database,
+        then restored while the poller is paused (maintenance lock) and no dashboard query runs."""
+        if self.headers.get("X-Requested-With") != "shelly-monitor":
+            raise Forbidden("missing X-Requested-With: shelly-monitor header")
+        ctype = (self.headers.get("Content-Type") or "").split(";")[0].strip().lower()
+        if ctype not in RESTORE_TYPES:
+            raise Unsupported("Content-Type must be application/gzip or application/octet-stream")
+        raw = self.headers.get("Content-Length")
+        if raw is None:
+            raise LengthRequired("Content-Length is required")
+        try:
+            length = int(raw)
+        except ValueError:
+            raise BadRequest("invalid Content-Length") from None
+        limit = self.restore_max_mb * 1024 * 1024
+        if length <= 0:
+            raise BadRequest("empty body")
+        if length > limit:
+            raise TooLarge(f"backup larger than {self.restore_max_mb} MB (SHELLY_RESTORE_MAX_MB)")
+        db = self.dashboard.db
+        folder = os.path.dirname(os.path.abspath(db))
+        fd, upload = tempfile.mkstemp(prefix=".shelly-upload-", dir=folder)
+        try:
+            with os.fdopen(fd, "wb") as f:
+                left = length
+                while left:
+                    chunk = self.rfile.read(min(left, 1 << 20))
+                    if not chunk:
+                        raise BadRequest("incomplete body")
+                    f.write(chunk)
+                    left -= len(chunk)
+            with self.maintenance.exclusive(), _DB_LOCK:
+                try:
+                    result = restore_from(upload, db, max_bytes=RESTORE_EXPANSION * limit, home=default_home_name())
+                except RestoreError as e:
+                    raise BadRequest(str(e)) from None
+        finally:
+            try:
+                os.unlink(upload)
+            except FileNotFoundError:
+                pass
+        log.warning("database %s restored from an upload by %s: samples %s -> %s, schema %s", db,
+                    self._client_ip(), result["samples_before"], result["samples_after"], result["schema_version"])
+        return result
+
+    # --- routes ------------------------------------------------------------------------------
     def do_GET(self):
         url = urlsplit(self.path)
         try:
             q = {k: v[-1] for k, v in parse_qs(url.query, strict_parsing=False).items()}
+            if url.path == "/healthz":
+                return self._health()
+            if url.path == "/login" and self.auth is not None:
+                nxt = webauth.sanitize_next(q.get("next"))
+                if self._logged_in():
+                    return self._send(302, b"", "text/plain", {"Location": nxt})
+                return self._login_page(200, nxt)
+            if not self._logged_in():
+                return self._deny(url)
             if url.path in ("/", "/index.html"):
                 self._send(200, self.index, "text/html; charset=utf-8")
+            elif url.path == "/api/backup":
+                self._backup()
+            elif url.path == "/api/backup/status":
+                self._json(200, self._backup_status())
             elif url.path in self.JSON_ROUTES:
                 with _DB_LOCK:
                     result = getattr(self.dashboard, self.JSON_ROUTES[url.path])(q)
@@ -646,6 +844,9 @@ class Handler(BaseHTTPRequestHandler):
         except sqlite3.Error as e:
             log.error("database error on %s: %s", url.path, e)
             self._json(500, {"error": "database error"})
+        except (BrokenPipeError, ConnectionResetError):  # the client went away (e.g. page left)
+            log.debug("client disconnected during %s", url.path)
+            self.close_connection = True
         except Exception:
             log.exception("unexpected error on %s", url.path)
             self._json(500, {"error": "internal error"})
@@ -676,10 +877,19 @@ class Handler(BaseHTTPRequestHandler):
     def _write(self):
         url = urlsplit(self.path)
         try:
+            if self.auth is not None and self.command == "POST" and url.path == "/login":
+                return self._post_login()
+            if not self._logged_in():
+                self.close_connection = True  # the request body is not read
+                return self._json(401, {"error": "login required"})
+            if self.auth is not None and self.command == "POST" and url.path == "/logout":
+                return self._post_logout()
             if self.groups.dash.readonly:
                 raise Forbidden("the dashboard is read-only (SHELLY_WEB_READONLY=1)")
             m = _GROUP_PATH.match(url.path)
-            if self.command == "POST" and url.path == "/api/custom-groups":
+            if self.command == "POST" and url.path == "/api/restore":
+                self._json(200, self._restore())
+            elif self.command == "POST" and url.path == "/api/custom-groups":
                 body = self._body()
                 with _DB_LOCK:
                     result = self.groups.save(body)
@@ -701,7 +911,14 @@ class Handler(BaseHTTPRequestHandler):
         except Forbidden as e:
             self._json(403, {"error": str(e)})
         except Unsupported as e:
+            self.close_connection = True
             self._json(415, {"error": str(e)})
+        except LengthRequired as e:
+            self.close_connection = True
+            self._json(411, {"error": str(e)})
+        except TooLarge as e:
+            self.close_connection = True  # the body is not read
+            self._json(413, {"error": str(e)})
         except BadRequest as e:
             self._json(400, {"error": str(e)})
         except NotFound as e:
@@ -709,6 +926,9 @@ class Handler(BaseHTTPRequestHandler):
         except sqlite3.Error as e:
             log.error("database error on %s %s: %s", self.command, url.path, e)
             self._json(500, {"error": "database error"})
+        except (BrokenPipeError, ConnectionResetError):  # the client went away (e.g. page left)
+            log.debug("client disconnected during %s", url.path)
+            self.close_connection = True
         except Exception:
             log.exception("unexpected error on %s %s", self.command, url.path)
             self._json(500, {"error": "internal error"})
@@ -716,20 +936,28 @@ class Handler(BaseHTTPRequestHandler):
     do_POST = do_PUT = do_DELETE = _write
 
 
-def make_server(db: str, interval: int, host: str, port: int, readonly: bool | None = None) -> ThreadingHTTPServer:
+def make_server(db: str, interval: int, host: str, port: int, readonly: bool | None = None,
+                poller=None, auth: webauth.WebAuth | None = None,
+                maintenance: Maintenance | None = None) -> ThreadingHTTPServer:
+    """`auth`: password login (None = no authentication). `poller`: object with `last_ok`,
+    `started` and `running` reported by /healthz (None = no poller in this process).
+    `maintenance`: shared with the in-process poller, so that a restore pauses it."""
     if readonly is None:
         readonly = os.environ.get("SHELLY_WEB_READONLY", "").strip() == "1"
-    dash = Dashboard(db, interval, readonly)
+    dash = Dashboard(db, interval, readonly, auth=auth is not None)
     index = _index_html()
     headers = {**SECURITY_HEADERS, "Content-Security-Policy": content_security_policy(index)}
     handler = type("BoundHandler", (Handler,), {"dashboard": dash, "groups": Groups(dash), "index": index,
-                                                "security_headers": headers})
+                                                "security_headers": headers, "auth": auth, "poller": poller,
+                                                "maintenance": maintenance or Maintenance(),
+                                                "backups": backup_config(), "restore_max_mb": restore_max_mb()})
     server = ThreadingHTTPServer((host, port), handler)
     server.daemon_threads = True
     return server
 
 
-def serve(db: str, interval: int, host: str, port: int, migrate_home: str = "home") -> int:
+def serve(db: str, interval: int, host: str, port: int, migrate_home: str = "home", poller=None,
+          auth: webauth.WebAuth | None = None, maintenance: Maintenance | None = None) -> int:
     if Path(db).is_file():
         try:  # apply schema migrations once, so read-only connections see the current schema
             Store(db, home=migrate_home).close()
@@ -738,7 +966,7 @@ def serve(db: str, interval: int, host: str, port: int, migrate_home: str = "hom
     else:
         log.warning("database %s not found yet: the dashboard will be empty until the poller writes it", db)
     try:
-        server = make_server(db, interval, host, port)
+        server = make_server(db, interval, host, port, poller=poller, auth=auth, maintenance=maintenance)
     except OSError as e:
         log.error("cannot listen on %s:%d: %s", host, port, e)
         return 1
@@ -747,13 +975,25 @@ def serve(db: str, interval: int, host: str, port: int, migrate_home: str = "hom
         raise KeyboardInterrupt
 
     signal.signal(signal.SIGTERM, _stop)
-    log.info("dashboard on http://%s:%d/ (no authentication: keep it on localhost or behind a proxy; %s)",
-             host, server.server_address[1],
-             "read-only" if server.RequestHandlerClass.groups.dash.readonly else "custom groups editable")
+    readonly = os.environ.get("SHELLY_WEB_READONLY", "").strip() == "1"
+    if auth is not None:
+        login = "password login enabled" + ("" if os.environ.get("SHELLY_WEB_COOKIE_SECRET") else
+                                            "; no SHELLY_WEB_COOKIE_SECRET: sessions end at restart")
+    else:
+        login = "no authentication: keep it on localhost or behind a proxy with its own login"
+    log.info("dashboard on http://%s:%d/ (%s; %s; poller %s)", host, server.server_address[1], login,
+             "read-only" if readonly else "custom groups editable", "in process" if poller is not None else "off")
+    if auth is None and host not in ("127.0.0.1", "localhost", "::1"):
+        log.warning("dashboard reachable from the network without a password: set SHELLY_WEB_PASSWORD "
+                    "or bind to 127.0.0.1 (host %s)", host)
+    if poller is not None:
+        poller.start()
     try:
         server.serve_forever()
     except KeyboardInterrupt:
         log.info("stopping")
     finally:
+        if poller is not None:
+            poller.stop()
         server.server_close()
     return 0

@@ -15,10 +15,12 @@ from datetime import datetime
 
 from . import __version__
 from .cloud import EVENT_KINDS, CloudError, ShellyCloud, Throttle, event_details, parse_all_status, split_channel_id
-from .config import (ConfigError, Home, cycle_warning, default_home_name, event_log_enabled, parse_homes,
-                     request_gap)
+from .backup import auto_backup, backup_filename, db_in_use, fmt_size
+from .config import (ConfigError, Home, backup_config, cycle_warning, default_home_name, event_log_enabled,
+                     parse_homes, request_gap)
+from .poller import Maintenance
 from .report import BY, aggregate, parse_range, render, write_samples_csv
-from .store import Store
+from .store import RestoreError, Store, restore_from
 
 log = logging.getLogger("shelly_monitor")
 
@@ -89,9 +91,9 @@ def existing_db() -> str:
     return path
 
 
-def open_store(path: str | None = None) -> Store:
+def open_store(path: str | None = None, shared: bool = False) -> Store:
     """Read-write store; data from 0.1.x databases is assigned to SHELLY_HOME_NAME."""
-    return Store(path or db_path(), home=default_home_name())
+    return Store(path or db_path(), home=default_home_name(), shared=shared)
 
 
 @dataclass
@@ -223,9 +225,49 @@ def cmd_poll(args) -> int:
         return 0 if poll_once(targets, store) else 1
 
 
+def poll_forever(targets: list[Target], step: float, stop: threading.Event, mark_ok=None,
+                 maint: Maintenance | None = None) -> None:
+    """Poll every `step` seconds, aligned to the clock, until `stop` is set. Opens its own
+    read-write store, kept in `maint.store` and used only under `maint.lock` (a restore closes it
+    between two cycles; it is reopened at the next one). `mark_ok()` is called after every cycle in
+    which every home succeeded; then an automatic backup is written when one is due."""
+    maint = maint or Maintenance()
+    backups = backup_config()
+    announced = False
+    try:
+        while not stop.is_set():
+            with maint.lock:
+                if maint.store is None:
+                    maint.store = open_store(shared=True)
+                    prepare_homes(targets, maint.store)
+                    if not announced:
+                        announced = True
+                        log.info("shelly-monitor %s polling, %d home(s) %s, interval %gs, request gap %gs, db %s",
+                                 __version__, len(targets),
+                                 ", ".join(f"{t.name!r} [{t.home.key_id}]" for t in targets), step,
+                                 targets[0].cloud.throttle.gap, db_path())
+                    else:
+                        log.info("database reopened after a restore")
+                try:
+                    if poll_once(targets, maint.store):
+                        if mark_ok is not None:
+                            mark_ok()
+                        auto_backup(maint.store, backups)
+                except Exception:  # keep the daemon alive on unexpected bugs, but make them loud
+                    log.exception("unexpected error during poll")
+            now = time.time()
+            stop.wait((int(now // step) + 1) * step - now)
+    finally:
+        with maint.lock:
+            if maint.store is not None:
+                maint.store.close()
+                maint.store = None
+
+
 def cmd_run(args) -> int:
     step = interval()
     targets = make_targets(step)
+    backup_config()  # configuration errors stop here
     stop = threading.Event()
 
     def _stop(signum, frame):
@@ -234,18 +276,7 @@ def cmd_run(args) -> int:
 
     signal.signal(signal.SIGTERM, _stop)
     signal.signal(signal.SIGINT, _stop)
-    with open_store() as store:
-        prepare_homes(targets, store)
-        log.info("shelly-monitor %s running, %d home(s) %s, interval %ds, request gap %gs, db %s", __version__,
-                 len(targets), ", ".join(f"{t.name!r} [{t.home.key_id}]" for t in targets), step,
-                 targets[0].cloud.throttle.gap, db_path())
-        while not stop.is_set():
-            try:
-                poll_once(targets, store)
-            except Exception:  # keep the daemon alive on unexpected bugs, but make them loud
-                log.exception("unexpected error during poll")
-            now = time.time()
-            stop.wait((int(now // step) + 1) * step - now)
+    poll_forever(targets, step, stop)
     return 0
 
 
@@ -470,7 +501,9 @@ def cmd_events(args) -> int:
 
 
 def cmd_serve(args) -> int:
-    from .web import serve
+    from . import web
+    from .auth import WebAuth
+    from .poller import BackgroundPoller
 
     host = args.host or os.environ.get("SHELLY_HTTP_HOST", "127.0.0.1")
     try:
@@ -478,7 +511,78 @@ def cmd_serve(args) -> int:
     except ValueError:
         print("shelly-monitor: SHELLY_HTTP_PORT must be an integer", file=sys.stderr)
         return 2
-    return serve(db_path(), interval(), host, port, migrate_home=default_home_name())
+    try:
+        auth = WebAuth.from_env()
+    except ConfigError as e:
+        print(f"shelly-monitor: configuration error: {e}", file=sys.stderr)
+        return 2
+    step = interval()
+    poller = None
+    maint = Maintenance()
+    if args.poll:
+        targets = make_targets(step)  # configuration errors stop here, before listening
+        backup_config()
+        poller = BackgroundPoller(lambda stop, mark_ok: poll_forever(targets, step, stop, mark_ok, maint))
+    return web.serve(db_path(), step, host, port, migrate_home=default_home_name(), poller=poller, auth=auth,
+                     maintenance=maint)
+
+
+def cmd_backup(args) -> int:
+    path = existing_db()
+    compress = not args.no_compress
+    out = args.out or backup_filename(compress=compress)
+    with Store(path, readonly=True) as st:
+        if out == "-":
+            n = st.backup_to(sys.stdout.buffer, compress=compress)
+            sys.stdout.buffer.flush()
+        else:
+            n = st.backup_to(out, compress=compress)
+    print(f"backup of {path} written to {'stdout' if out == '-' else out} ({fmt_size(n)})", file=sys.stderr)
+    return 0
+
+
+def _confirm(prompt: str) -> bool:
+    """Interactive yes/no; False when stdin is not a terminal."""
+    if not sys.stdin.isatty():
+        print("shelly-monitor: not a terminal: pass --yes to restore without confirmation", file=sys.stderr)
+        return False
+    return input(prompt).strip().lower() in ("y", "yes", "s", "si")
+
+
+def cmd_restore(args) -> int:
+    db = db_path()
+    if not os.path.isfile(args.file):
+        print(f"shelly-monitor: backup file not found: {args.file}", file=sys.stderr)
+        return 1
+    print("shelly-monitor: stop the poller ('run', 'serve --poll') and the dashboard ('serve') that use "
+          f"{db} before restoring; to restore a running 'serve', use the dashboard instead.", file=sys.stderr)
+    reason = db_in_use(db)
+    if reason:
+        print(f"shelly-monitor: refusing to restore: {db} is {reason}. Stop the processes using it and retry.",
+              file=sys.stderr)
+        return 1
+    if not args.yes and not _confirm(f"Replace {db} with {args.file}? Its current data is lost. [y/N] "):
+        print("shelly-monitor: restore cancelled", file=sys.stderr)
+        return 1
+    try:
+        res = restore_from(args.file, db, home=default_home_name())
+    except RestoreError as e:
+        print(f"shelly-monitor: restore refused, database unchanged: {e}", file=sys.stderr)
+        return 1
+    before = "none" if res["samples_before"] is None else res["samples_before"]
+    migrated = f", migrated to {res['schema_version_now']}" if res["migrated"] else ""
+    print(f"restored {db} from {args.file}: samples {before} -> {res['samples_after']}, "
+          f"schema {res['schema_version']}{migrated}")
+    return 0
+
+
+SERVE_HELP = """\
+Web dashboard. Login: when SHELLY_WEB_PASSWORD (plain text, hashed at startup) or
+SHELLY_WEB_PASSWORD_HASH (scrypt$N$r$p$salt$hash) is set, every page and API needs a password
+login (cookie session, SHELLY_WEB_SESSION_DAYS, default 7); otherwise there is no authentication:
+keep it on 127.0.0.1 or behind a reverse proxy with its own login. Without SHELLY_WEB_COOKIE_SECRET
+(hex) the sessions end at every restart. SHELLY_WEB_READONLY=1 disables custom group edits.
+GET /healthz is always public."""
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -545,9 +649,26 @@ def build_parser() -> argparse.ArgumentParser:
     add_range(vp)
     vp.set_defaults(func=cmd_events)
 
-    sp = sub.add_parser("serve", help="web dashboard (no authentication; SHELLY_WEB_READONLY=1 disables group edits)")
+    bp = sub.add_parser("backup", help="write a consistent backup of the database (safe while polling)")
+    bp.add_argument("--out", metavar="FILE",
+                    help="output file, '-' = stdout (default: ./shelly-monitor-YYYYmmdd-HHMMSS.db.gz)")
+    bp.add_argument("--no-compress", action="store_true", help="plain SQLite file instead of gzip")
+    bp.set_defaults(func=cmd_backup)
+
+    rsp = sub.add_parser("restore", help="replace the database with a backup (.db or .db.gz); "
+                                         "stop the poller and the dashboard first")
+    rsp.add_argument("file", metavar="FILE", help="backup file")
+    rsp.add_argument("--yes", action="store_true", help="do not ask for confirmation")
+    rsp.set_defaults(func=cmd_restore)
+
+    sp = sub.add_parser("serve", help="web dashboard (password login if SHELLY_WEB_PASSWORD is set, "
+                                      "otherwise no authentication)",
+                        description=SERVE_HELP, formatter_class=argparse.RawDescriptionHelpFormatter)
     sp.add_argument("--host", help="bind address (default: SHELLY_HTTP_HOST or 127.0.0.1)")
     sp.add_argument("--port", type=int, help="port (default: SHELLY_HTTP_PORT or 8787)")
+    sp.add_argument("--poll", action="store_true",
+                    help="also poll the cloud in the same process (same as 'run', in a background thread): "
+                         "one container, one port")
     sp.set_defaults(func=cmd_serve)
     return p
 
@@ -565,3 +686,6 @@ def main(argv: list[str] | None = None) -> int:
     except sqlite3.OperationalError as e:
         print(f"shelly-monitor: cannot use database {db_path()}: {e}", file=sys.stderr)
         return 1
+    except ConfigError as e:
+        print(f"shelly-monitor: configuration error: {e}", file=sys.stderr)
+        return 2
